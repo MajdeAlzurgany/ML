@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مترجم GTA VI</string>
+
+    <!-- Tabs -->
+    <string name="tab_camera">الكاميرا</string>
+    <string name="tab_listen">الاستماع</string>
+    <string name="tab_type">كتابة</string>
+    <string name="tab_settings">الإعدادات</string>
+
+    <!-- Permissions -->
+    <string name="perm_camera_title">نحتاج الكاميرا</string>
+    <string name="perm_camera_body">وجّه كاميرا الموبايل على التلفزيون، والتطبيق يقرا الـ subtitles ويترجمها لايف.</string>
+    <string name="perm_mic_title">نحتاج المايك</string>
+    <string name="perm_mic_body">التطبيق يسمع حوار اللعبة من سماعة التلفزيون ويترجمه ويشرحه.</string>
+    <string name="perm_allow">اسمح</string>
+    <string name="perm_open_settings">فتح إعدادات التطبيق</string>
+
+    <!-- Camera -->
+    <string name="camera_pause">إيقاف مؤقت</string>
+    <string name="camera_resume">كمّل</string>
+    <string name="camera_paused">متوقف مؤقتًا</string>
+    <string name="snap">صوّر واشرح</string>
+    <string name="zoom">تقريب</string>
+    <string name="camera_empty_hint">ثبّت الموبايل قدام الشاشة وخلي المربع الوردي على مكان الـ subtitles.\nاسحب المربع باش تحركه، واسحب النقاط باش تكبره أو تصغره.\nلو الكتابة صعبة، دوس على زر التصوير.</string>
+    <string name="live_text_label">قاعد يقرا:</string>
+
+    <!-- Listen -->
+    <string name="listening_on">قاعد يسمع… الحوار يتترجم أول بأول</string>
+    <string name="listening_off">دوس باش يبدا يسمع حوار اللعبة</string>
+    <string name="mic_sensitivity">الحساسية</string>
+    <string name="listen_tip">حط الموبايل قريب من السماعة. نصيحة: نقص صوت الموسيقى في إعدادات اللعبة وعلّي صوت الحوار باش الدقة تزيد.</string>
+    <string name="mic_error">ما قدرناش نفتحو المايك. سكّر أي تطبيق ثاني يستعمل المايك وعاود.</string>
+    <string name="listen_empty_hint">أول ما شخصية تهدرز، الترجمة والشرح يطلعو هني.</string>
+
+    <!-- Manual -->
+    <string name="manual_hint">اكتب أو الصق جملة من اللعبة…</string>
+    <string name="manual_send">ترجم واشرح</string>
+    <string name="manual_empty_hint">اكتب أي جملة أو كلمة سمعتها في اللعبة وتوا نشرحها لك.</string>
+
+    <!-- Card -->
+    <string name="explain_more">اشرح أكثر</string>
+    <string name="copy">نسخ</string>
+    <string name="copied">تم النسخ</string>
+    <string name="kind_objective">مهمة</string>
+    <string name="clear_history">مسح</string>
+
+    <!-- Status -->
+    <string name="status_working">يترجم… (في الطابور: %1$d)</string>
+    <string name="notice_no_key">حط مفتاح Gemini المجاني من الإعدادات باش نبدو.</string>
+    <string name="notice_invalid_key">المفتاح غلط أو مش مفعّل. تأكد منه في الإعدادات.</string>
+    <string name="notice_rate_limit">وصلت لحد الطلبات المجاني في الدقيقة — نكمل بعد %1$d ث.</string>
+    <string name="notice_daily_quota">خلصت الحصة اليومية المجانية للموديل هذا. اختار موديل ثاني (مثلاً flash-lite) من الإعدادات أو استنى لبكرة.</string>
+    <string name="notice_blocked">Gemini رفض المقطع هذا (فلتر أمان). المقطع الجاي يمشي عادي.</string>
+    <string name="notice_network">مشكلة في الإنترنت. تأكد من الاتصال.</string>
+    <string name="notice_server">سيرفرات Gemini مضغوطة توا، نعاودو نحاولو.</string>
+    <string name="notice_model_not_found">الموديل هذا مش موجود. اختار موديل من الإعدادات.</string>
+    <string name="notice_region">Gemini API مش متاح من موقعك الحالي.</string>
+    <string name="notice_bad_request">صار خطأ في الطلب: %1$s</string>
+    <string name="notice_parse">جانا رد مش مفهوم من Gemini، نكملو في اللي بعده.</string>
+    <string name="notice_nothing_found">ما لقيتش حوار واضح.</string>
+    <string name="dismiss">إخفاء</string>
+
+    <!-- Settings -->
+    <string name="settings_title">الإعدادات</string>
+    <string name="section_key">مفتاح Gemini (مجاني)</string>
+    <string name="key_help">التطبيق مجاني ويستعمل مفتاحك الخاص من Google AI Studio (ما يحتاجش بطاقة). المفتاح يتخزن مشفّر في جهازك بس.</string>
+    <string name="key_label">Gemini API Key</string>
+    <string name="save_and_test">حفظ واختبار</string>
+    <string name="get_free_key">جيب مفتاح مجاني</string>
+    <string name="key_checking">قاعد نتأكد من المفتاح…</string>
+    <string name="key_ok">المفتاح شغال ✅ (%1$d موديل متاح)</string>
+    <string name="key_failed">المفتاح ما مشاش ❌</string>
+    <string name="section_model">الموديل</string>
+    <string name="model_label">اسم الموديل</string>
+    <string name="model_apply">تطبيق</string>
+    <string name="model_help">الافتراضي gemini-flash-latest يتحدّث أوتوماتيك لأحدث Flash. لو خلصت الحصة، جرب نسخة flash-lite.</string>
+    <string name="section_language">لغة الترجمة والشرح</string>
+    <string name="style_libyan">ليبي (لهجة طرابلسية)</string>
+    <string name="style_msa">عربي فصيح</string>
+    <string name="detail_short">شرح مختصر</string>
+    <string name="detail_detailed">شرح مفصّل</string>
+    <string name="section_quota">سرعة الطلبات</string>
+    <string name="rpm_value">%1$d طلب في الدقيقة</string>
+    <string name="rpm_help">الخطة المجانية تسمح تقريبًا بـ 10 طلبات في الدقيقة. التطبيق يجمع الجمل المتتالية في طلب واحد باش يوفّر.</string>
+    <string name="section_privacy">الخصوصية</string>
+    <string name="privacy_note">الصور والمقاطع الصوتية تمشي لـ Google Gemini للترجمة بس، وما تتخزنش في التطبيق. في الخطة المجانية Google ممكن تستعمل البيانات لتحسين خدماتها.</string>
+    <string name="start_now">يلا نبدو 🎮</string>
+</resources>
