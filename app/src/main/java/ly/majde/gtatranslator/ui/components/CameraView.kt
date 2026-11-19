@@ -6,7 +6,6 @@ import android.util.Size as AndroidSize
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
-import androidx.camera.mlkit.vision.MlKitAnalyzer
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
@@ -49,8 +48,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.roundToInt
-import ly.majde.gtatranslator.camera.SubtitleText
-import ly.majde.gtatranslator.camera.ThrottledAnalyzer
+import ly.majde.gtatranslator.camera.RoiOcrAnalyzer
 import ly.majde.gtatranslator.data.NormRect
 
 /** Lets the screen grab the current preview frame for "snap & explain". */
@@ -62,8 +60,8 @@ class CameraHandle {
 }
 
 /**
- * Live camera preview + on-device OCR (ML Kit). Text coordinates are delivered in
- * preview-view space, so they line up exactly with the subtitle region drawn on top.
+ * Camera preview + subtitle OCR. The analyzer crops exactly the region drawn by
+ * [RoiOverlay] from a 1080p frame, which is what keeps far-away TV text readable.
  */
 @Composable
 fun SubtitleCameraView(
@@ -88,25 +86,20 @@ fun SubtitleCameraView(
     DisposableEffect(lifecycleOwner) {
         val executor = Executors.newSingleThreadExecutor()
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-        val mlKitAnalyzer = MlKitAnalyzer(
-            listOf(recognizer),
-            ImageAnalysis.COORDINATE_SYSTEM_VIEW_REFERENCED,
-            executor,
-        ) { result ->
-            val text = result.getValue(recognizer)
-            if (text != null) latestOnText(SubtitleText.extract(text, roiPx.get()))
-        }
+        val analyzer = RoiOcrAnalyzer(
+            recognizer = recognizer,
+            roiInView = { roiPx.get() },
+            intervalMs = ANALYSIS_INTERVAL_MS,
+            onText = { latestOnText(it) },
+        )
         controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
         controller.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
         controller.imageAnalysisResolutionSelector = ResolutionSelector.Builder()
             .setResolutionStrategy(
-                ResolutionStrategy(
-                    AndroidSize(1280, 720),
-                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
-                )
+                ResolutionStrategy(AndroidSize(1920, 1080), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
             )
             .build()
-        controller.setImageAnalysisAnalyzer(executor, ThrottledAnalyzer(mlKitAnalyzer, ANALYSIS_INTERVAL_MS))
+        controller.setImageAnalysisAnalyzer(executor, analyzer)
         controller.bindToLifecycle(lifecycleOwner)
 
         onDispose {
@@ -135,12 +128,9 @@ fun SubtitleCameraView(
     )
 }
 
-private const val ANALYSIS_INTERVAL_MS = 350L
+private const val ANALYSIS_INTERVAL_MS = 180L
 
-/**
- * Draggable subtitle region: drag inside to move, drag the corner dots to resize.
- * Must be laid out left-to-right (coordinates are physical pixels).
- */
+/** Draggable subtitle region: drag inside to move, drag the corner dots to resize. */
 @Composable
 fun RoiOverlay(
     roi: NormRect,
@@ -163,7 +153,7 @@ fun RoiOverlay(
         val b = roi.bottom * h
 
         Canvas(Modifier.fillMaxSize()) {
-            val shade = Color.Black.copy(alpha = 0.45f)
+            val shade = Color.Black.copy(alpha = 0.5f)
             drawRect(shade, Offset.Zero, Size(size.width, t))
             drawRect(shade, Offset(0f, b), Size(size.width, size.height - b))
             drawRect(shade, Offset(0f, t), Size(l, b - t))
@@ -172,60 +162,40 @@ fun RoiOverlay(
                 color = accent,
                 topLeft = Offset(l, t),
                 size = Size(r - l, b - t),
-                cornerRadius = CornerRadius(10.dp.toPx()),
-                style = Stroke(width = 2.dp.toPx()),
+                cornerRadius = CornerRadius(12.dp.toPx()),
+                style = Stroke(width = 2.5.dp.toPx()),
             )
         }
 
-        // Move: drag anywhere inside the region.
         Box(
             Modifier
                 .absoluteOffset { IntOffset(l.roundToInt(), t.roundToInt()) }
                 .size(with(density) { (r - l).toDp() }, with(density) { (b - t).toDp() })
-                .roiDrag(
-                    w, h,
-                    current = { currentRoi },
-                    transform = { start, dx, dy -> start.moveBy(dx, dy) },
-                    onChange = { currentOnChange(it) },
-                    onEnd = { currentOnFinished() },
-                )
+                .roiDrag(w, h, { currentRoi }, { s, dx, dy -> s.moveBy(dx, dy) }, { currentOnChange(it) }, { currentOnFinished() })
         )
-
         RoiHandle(cx = l, cy = t, color = accent) {
-            Modifier.roiDrag(
-                w, h,
-                current = { currentRoi },
-                transform = { start, dx, dy -> start.resizeTopLeft(dx, dy) },
-                onChange = { currentOnChange(it) },
-                onEnd = { currentOnFinished() },
-            )
+            Modifier.roiDrag(w, h, { currentRoi }, { s, dx, dy -> s.resizeTopLeft(dx, dy) }, { currentOnChange(it) }, { currentOnFinished() })
         }
         RoiHandle(cx = r, cy = b, color = accent) {
-            Modifier.roiDrag(
-                w, h,
-                current = { currentRoi },
-                transform = { start, dx, dy -> start.resizeBottomRight(dx, dy) },
-                onChange = { currentOnChange(it) },
-                onEnd = { currentOnFinished() },
-            )
+            Modifier.roiDrag(w, h, { currentRoi }, { s, dx, dy -> s.resizeBottomRight(dx, dy) }, { currentOnChange(it) }, { currentOnFinished() })
         }
     }
 }
 
 @Composable
 private fun RoiHandle(cx: Float, cy: Float, color: Color, gesture: () -> Modifier) {
-    val touchSize = 44.dp
-    val half = with(LocalDensity.current) { (touchSize / 2).roundToPx() }
+    val touch = 48.dp
+    val half = with(LocalDensity.current) { (touch / 2).roundToPx() }
     Box(
         modifier = Modifier
             .absoluteOffset { IntOffset(cx.roundToInt() - half, cy.roundToInt() - half) }
-            .size(touchSize)
+            .size(touch)
             .then(gesture()),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             Modifier
-                .size(16.dp)
+                .size(18.dp)
                 .background(color, CircleShape)
                 .border(2.dp, Color.White, CircleShape)
         )

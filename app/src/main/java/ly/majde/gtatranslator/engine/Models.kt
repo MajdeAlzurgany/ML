@@ -1,48 +1,68 @@
 package ly.majde.gtatranslator.engine
 
-import ly.majde.gtatranslator.data.GeminiException
+import ly.majde.gtatranslator.ai.AiException
+import ly.majde.gtatranslator.ai.Role
 
-enum class Source { CAMERA, SNAPSHOT, AUDIO, MANUAL }
+enum class Source { CAMERA, SNAPSHOT, AUDIO, MANUAL;
+
+    val isLive: Boolean get() = this == CAMERA || this == AUDIO
+}
+
+enum class LineStatus { DRAFT, REFINING, DONE, OFFLINE }
 
 data class SlangTerm(val term: String, val meaning: String)
 
-data class TranslationEntry(
+/** One translated line of game dialogue. */
+data class LiveLine(
     val id: Long,
     val source: Source,
     val original: String,
-    val speaker: String,
-    val translation: String,
-    val explanation: String,
-    val slang: List<SlangTerm>,
-    val kind: String,
-    val timestamp: Long,
-    val deepExplanation: String? = null,
-    val deepLoading: Boolean = false,
+    val speaker: String = "",
+    /** Instant on-device translation. */
+    val draft: String = "",
+    /** AI translation (streams in). */
+    val translation: String = "",
+    val explanation: String = "",
+    val slang: List<SlangTerm> = emptyList(),
+    val status: LineStatus = LineStatus.DRAFT,
+    val provider: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+) {
+    val bestTranslation: String get() = translation.ifBlank { draft }
+}
+
+data class ChatMessage(
+    val id: Long,
+    val role: Role,
+    val text: String,
+    val quote: String? = null,
+    val streaming: Boolean = false,
+    val provider: String = "",
+    val error: Notice? = null,
+    val timestamp: Long = System.currentTimeMillis(),
 )
 
 /** User-facing conditions; the UI maps each one to a localized message. */
 enum class Notice {
-    NO_KEY, INVALID_KEY, RATE_LIMIT, DAILY_QUOTA, BLOCKED, NETWORK, SERVER,
-    MODEL_NOT_FOUND, REGION, BAD_REQUEST, PARSE, NOTHING_FOUND,
+    NO_KEY, OFFLINE_ONLY, INVALID_KEY, RATE_LIMIT, DAILY_LIMIT, NETWORK, SERVER, REGION,
+    BLOCKED, NOTHING_FOUND, MIC_ERROR, BAD_REQUEST,
 }
 
-data class EngineState(
-    val busy: Boolean = false,
-    val pending: Int = 0,
+data class EngineStatus(
+    val busy: Int = 0,
     val notice: Notice? = null,
-    val noticeDetail: String? = null,
-    /** SystemClock.elapsedRealtime() until which requests are paused (rate limit). */
-    val cooldownUntil: Long = 0L,
+    val detail: String? = null,
 )
 
-fun GeminiException.toNotice(): Notice = when (kind) {
-    GeminiException.Kind.INVALID_KEY -> Notice.INVALID_KEY
-    GeminiException.Kind.RATE_LIMIT -> if (dailyQuota) Notice.DAILY_QUOTA else Notice.RATE_LIMIT
-    GeminiException.Kind.BLOCKED -> Notice.BLOCKED
-    GeminiException.Kind.NETWORK -> Notice.NETWORK
-    GeminiException.Kind.SERVER -> Notice.SERVER
-    GeminiException.Kind.MODEL_NOT_FOUND -> Notice.MODEL_NOT_FOUND
-    GeminiException.Kind.REGION -> Notice.REGION
-    GeminiException.Kind.BAD_REQUEST -> Notice.BAD_REQUEST
-    GeminiException.Kind.PARSE -> Notice.PARSE
+fun AiException.toNotice(): Notice = when (kind) {
+    AiException.Kind.NO_PROVIDER -> Notice.NO_KEY
+    AiException.Kind.INVALID_KEY -> Notice.INVALID_KEY
+    AiException.Kind.RATE_LIMIT -> if (daily) Notice.DAILY_LIMIT else Notice.RATE_LIMIT
+    AiException.Kind.BLOCKED -> Notice.BLOCKED
+    AiException.Kind.NETWORK -> Notice.NETWORK
+    AiException.Kind.SERVER -> Notice.SERVER
+    AiException.Kind.MODEL_NOT_FOUND -> Notice.SERVER
+    AiException.Kind.REGION -> Notice.REGION
+    AiException.Kind.BAD_REQUEST -> Notice.BAD_REQUEST
+    AiException.Kind.PARSE -> Notice.SERVER
 }

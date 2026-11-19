@@ -13,15 +13,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -33,11 +36,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,35 +51,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlin.math.roundToInt
 import ly.majde.gtatranslator.BuildConfig
 import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.data.AppSettings
 import ly.majde.gtatranslator.data.DetailLevel
 import ly.majde.gtatranslator.data.OutputStyle
+import ly.majde.gtatranslator.translate.OfflineTranslator
 import ly.majde.gtatranslator.ui.KeyCheck
 import ly.majde.gtatranslator.ui.MainViewModel
-import ly.majde.gtatranslator.ui.components.noticeMessage
+import ly.majde.gtatranslator.ui.Provider
+import ly.majde.gtatranslator.ui.components.GlowCard
+import ly.majde.gtatranslator.ui.components.Pill
+import ly.majde.gtatranslator.ui.components.noticeText
 
-private const val AI_STUDIO_KEY_URL = "https://aistudio.google.com/apikey"
+const val GROQ_KEYS_URL = "https://console.groq.com/keys"
+const val GEMINI_KEYS_URL = "https://aistudio.google.com/apikey"
 
 @Composable
-fun SettingsScreen(vm: MainViewModel, onDone: () -> Unit) {
+fun SettingsScreen(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val models by vm.models.collectAsStateWithLifecycle()
-    val keyCheck by vm.keyCheck.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current
-
-    var keyInput by rememberSaveable { mutableStateOf(settings.apiKey) }
-    var showKey by rememberSaveable { mutableStateOf(false) }
-    var modelInput by rememberSaveable(settings.model) { mutableStateOf(settings.model) }
-    var modelMenuOpen by remember { mutableStateOf(false) }
-    var rpm by remember { mutableIntStateOf(settings.requestsPerMinute) }
+    val keyChecks by vm.keyChecks.collectAsStateWithLifecycle()
+    val groqModels by vm.groqModels.collectAsStateWithLifecycle()
+    val offlineState by vm.offlineState.collectAsStateWithLifecycle()
+    var textScale by remember { mutableFloatStateOf(settings.textScale) }
 
     Column(
         modifier = Modifier
@@ -84,83 +88,90 @@ fun SettingsScreen(vm: MainViewModel, onDone: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
 
-        SectionCard(stringResource(R.string.section_key)) {
+        Section(stringResource(R.string.section_ai)) {
             Text(
-                stringResource(R.string.key_help),
+                stringResource(R.string.ai_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
-                value = keyInput,
-                onValueChange = { keyInput = it.trim() },
-                label = { Text(stringResource(R.string.key_label)) },
-                singleLine = true,
-                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { showKey = !showKey }) {
-                        Icon(if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
+            KeyEditor(
+                title = stringResource(R.string.groq_title),
+                subtitle = stringResource(R.string.groq_subtitle),
+                badge = stringResource(R.string.recommended),
+                current = settings.groqKey,
+                check = keyChecks[Provider.GROQ] ?: KeyCheck.Idle,
+                getKeyUrl = GROQ_KEYS_URL,
+                onSave = { vm.saveAndCheckKey(Provider.GROQ, it) },
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    val key = keyInput.trim()
-                    vm.updateSettings { it.copy(apiKey = key) }
-                    vm.checkKey(key)
-                }) { Text(stringResource(R.string.save_and_test)) }
-                OutlinedButton(onClick = { uriHandler.openUri(AI_STUDIO_KEY_URL) }) {
-                    Text(stringResource(R.string.get_free_key))
-                }
-            }
-            KeyCheckRow(keyCheck)
+            HorizontalDivider()
+            KeyEditor(
+                title = stringResource(R.string.gemini_title),
+                subtitle = stringResource(R.string.gemini_subtitle),
+                badge = stringResource(R.string.optional),
+                current = settings.geminiKey,
+                check = keyChecks[Provider.GEMINI] ?: KeyCheck.Idle,
+                getKeyUrl = GEMINI_KEYS_URL,
+                onSave = { vm.saveAndCheckKey(Provider.GEMINI, it) },
+            )
         }
 
-        SectionCard(stringResource(R.string.section_model)) {
-            Box {
-                OutlinedTextField(
-                    value = modelInput,
-                    onValueChange = { modelInput = it.trim() },
-                    label = { Text(stringResource(R.string.model_label)) },
-                    singleLine = true,
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            if (models.isEmpty() && settings.apiKey.isNotBlank()) vm.checkKey()
-                            modelMenuOpen = true
-                        }) { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+        Section(stringResource(R.string.section_models)) {
+            ModelPicker(
+                label = stringResource(R.string.groq_model),
+                value = settings.groqModel,
+                autoLabel = stringResource(R.string.model_auto),
+                options = groqModels.filter { m -> listOf("whisper", "guard", "orpheus", "tts", "compound").none { m.contains(it) } },
+                onSelect = { m -> vm.updateSettings { it.copy(groqModel = m) } },
+            )
+            ModelPicker(
+                label = stringResource(R.string.gemini_model),
+                value = settings.geminiModel,
+                autoLabel = AppSettings.DEFAULT_GEMINI_MODEL,
+                options = vm.geminiModels.collectAsStateWithLifecycle().value,
+                onSelect = { m -> vm.updateSettings { it.copy(geminiModel = m.ifBlank { AppSettings.DEFAULT_GEMINI_MODEL }) } },
+            )
+            Text(
+                stringResource(R.string.models_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Section(stringResource(R.string.section_offline)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when (offlineState) {
+                    OfflineTranslator.State.READY -> Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
+                    OfflineTranslator.State.DOWNLOADING -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    OfflineTranslator.State.FAILED -> Icon(Icons.Filled.Error, null, tint = MaterialTheme.colorScheme.error)
+                    OfflineTranslator.State.IDLE -> Icon(Icons.Filled.CloudDownload, null)
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(
+                        when (offlineState) {
+                            OfflineTranslator.State.READY -> R.string.offline_ready
+                            OfflineTranslator.State.DOWNLOADING -> R.string.offline_downloading
+                            OfflineTranslator.State.FAILED -> R.string.offline_failed
+                            OfflineTranslator.State.IDLE -> R.string.offline_idle
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
                 )
-                DropdownMenu(expanded = modelMenuOpen, onDismissRequest = { modelMenuOpen = false }) {
-                    (listOf(AppSettings.DEFAULT_MODEL) + models).distinct().forEach { name ->
-                        DropdownMenuItem(
-                            text = { Text(name) },
-                            onClick = {
-                                modelInput = name
-                                modelMenuOpen = false
-                                vm.updateSettings { it.copy(model = name) }
-                            },
-                        )
-                    }
+                if (offlineState == OfflineTranslator.State.FAILED || offlineState == OfflineTranslator.State.IDLE) {
+                    TextButton(onClick = vm::retryOfflinePack) { Text(stringResource(R.string.download)) }
                 }
             }
-            if (modelInput != settings.model) {
-                TextButton(onClick = {
-                    val name = modelInput.ifBlank { AppSettings.DEFAULT_MODEL }
-                    vm.updateSettings { it.copy(model = name) }
-                }) { Text(stringResource(R.string.model_apply)) }
-            }
             Text(
-                stringResource(R.string.model_help),
+                stringResource(R.string.offline_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        SectionCard(stringResource(R.string.section_language)) {
+        Section(stringResource(R.string.section_language)) {
             RadioRow(stringResource(R.string.style_libyan), settings.style == OutputStyle.LIBYAN) {
                 vm.updateSettings { it.copy(style = OutputStyle.LIBYAN) }
             }
@@ -176,23 +187,25 @@ fun SettingsScreen(vm: MainViewModel, onDone: () -> Unit) {
             }
         }
 
-        SectionCard(stringResource(R.string.section_quota)) {
-            Text(stringResource(R.string.rpm_value, rpm), style = MaterialTheme.typography.titleSmall)
+        Section(stringResource(R.string.section_display)) {
+            Text(stringResource(R.string.text_size), style = MaterialTheme.typography.labelLarge)
             Slider(
-                value = rpm.toFloat(),
-                onValueChange = { rpm = it.roundToInt() },
-                valueRange = 2f..30f,
-                steps = 27,
-                onValueChangeFinished = { vm.updateSettings { s -> s.copy(requestsPerMinute = rpm) } },
+                value = textScale,
+                onValueChange = { textScale = it },
+                valueRange = 0.85f..1.6f,
+                onValueChangeFinished = { vm.updateSettings { it.copy(textScale = textScale) } },
             )
             Text(
-                stringResource(R.string.rpm_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                stringResource(R.string.text_size_preview),
+                style = MaterialTheme.typography.headlineSmall.let { it.copy(fontSize = it.fontSize * textScale) },
+                fontWeight = FontWeight.ExtraBold,
             )
+            SwitchRow(stringResource(R.string.show_original), settings.showOriginal) { v -> vm.updateSettings { it.copy(showOriginal = v) } }
+            SwitchRow(stringResource(R.string.speak_translations), settings.speak) { v -> vm.updateSettings { it.copy(speak = v) } }
+            SwitchRow(stringResource(R.string.web_search), settings.webSearch) { v -> vm.updateSettings { it.copy(webSearch = v) } }
         }
 
-        SectionCard(stringResource(R.string.section_privacy)) {
+        Section(stringResource(R.string.section_privacy)) {
             Text(
                 stringResource(R.string.privacy_note),
                 style = MaterialTheme.typography.bodySmall,
@@ -200,28 +213,124 @@ fun SettingsScreen(vm: MainViewModel, onDone: () -> Unit) {
             )
         }
 
-        if (settings.apiKey.isNotBlank()) {
-            Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.start_now))
-            }
+        TextButton(onClick = { vm.updateSettings { it.copy(onboardingDone = false) } }) {
+            Text(stringResource(R.string.replay_onboarding))
         }
         Text(
-            "v${BuildConfig.VERSION_NAME}",
+            "v${BuildConfig.VERSION_NAME} · Tajawal font © its authors (SIL OFL 1.1)",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline,
+        )
+        Spacer(Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    GlowCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            content()
+        }
+    }
+}
+
+@Composable
+fun KeyEditor(
+    title: String,
+    subtitle: String,
+    badge: String,
+    current: String,
+    check: KeyCheck,
+    getKeyUrl: String,
+    onSave: (String) -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    var input by rememberSaveable(current) { mutableStateOf(current) }
+    var show by rememberSaveable { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.width(6.dp))
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            Pill(badge)
+            Spacer(Modifier.weight(1f))
+            if (current.isNotBlank()) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+        }
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it.trim() },
+            label = { Text(stringResource(R.string.api_key)) },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                IconButton(onClick = { show = !show }) {
+                    Icon(if (show) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onSave(input) }) { Text(stringResource(R.string.save_and_test)) }
+            OutlinedButton(onClick = { uriHandler.openUri(getKeyUrl) }) { Text(stringResource(R.string.get_free_key)) }
+        }
+        KeyCheckRow(check)
+    }
+}
+
+@Composable
+fun KeyCheckRow(state: KeyCheck) {
+    when (state) {
+        KeyCheck.Idle -> Unit
+        KeyCheck.Checking -> Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.key_checking), style = MaterialTheme.typography.bodySmall)
+        }
+        is KeyCheck.Ok -> Text(
+            stringResource(R.string.key_ok, state.modelCount),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+        is KeyCheck.Failed -> Text(
+            stringResource(R.string.key_failed) + " " + noticeText(state.notice, state.detail),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
         )
     }
 }
 
 @Composable
-private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            content()
+private fun ModelPicker(label: String, value: String, autoLabel: String, options: List<String>, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedTextField(
+            value = value.ifBlank { autoLabel },
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            trailingIcon = {
+                IconButton(onClick = { open = true }) { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text(autoLabel) }, onClick = {
+                onSelect("")
+                open = false
+            })
+            options.forEach { m ->
+                DropdownMenuItem(text = { Text(m) }, onClick = {
+                    onSelect(m)
+                    open = false
+                })
+            }
         }
     }
 }
@@ -241,30 +350,9 @@ private fun RadioRow(label: String, selected: Boolean, onSelect: () -> Unit) {
 }
 
 @Composable
-private fun KeyCheckRow(state: KeyCheck) {
-    when (state) {
-        KeyCheck.Idle -> Unit
-        KeyCheck.Checking -> Row(verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.key_checking), style = MaterialTheme.typography.bodySmall)
-        }
-        is KeyCheck.Ok -> Text(
-            stringResource(R.string.key_ok, state.modelCount),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.secondary,
-        )
-        is KeyCheck.Failed -> Column {
-            Text(
-                stringResource(R.string.key_failed),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-            Text(
-                noticeMessage(state.notice, state.detail),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

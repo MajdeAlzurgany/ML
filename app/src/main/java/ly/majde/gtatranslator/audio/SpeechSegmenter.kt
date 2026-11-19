@@ -1,9 +1,14 @@
 package ly.majde.gtatranslator.audio
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import com.konovalov.vad.silero.VadSilero
+import com.konovalov.vad.silero.config.FrameSize
+import com.konovalov.vad.silero.config.Mode
+import com.konovalov.vad.silero.config.SampleRate
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -13,11 +18,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 /**
- * Records the microphone and cuts it into speech segments with a lightweight,
- * adaptive energy VAD. The noise floor follows the game's music/ambience, so a
- * segment starts when voices rise above it. Each segment is delivered as a WAV file.
+ * Listens to the microphone and cuts out speech segments.
+ * Uses the Silero neural voice-activity detector (on-device), which tells voices
+ * apart from music, gunfire and traffic far better than a volume threshold.
+ * Falls back to an adaptive energy detector if the model cannot load.
  */
 class SpeechSegmenter(
+    private val context: Context,
     private val sensitivity: () -> Float,
     private val onLevel: (Float) -> Unit,
     private val onSegment: (ByteArray) -> Unit,
@@ -25,30 +32,29 @@ class SpeechSegmenter(
 
     @SuppressLint("MissingPermission")
     suspend fun run(): Unit = withContext(Dispatchers.IO) {
-        val frameSamples = SAMPLE_RATE * FRAME_MS / 1000
-        val minBuffer = AudioRecord.getMinBufferSize(
-            SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-        )
+        val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minBuffer > 0) { "Audio recording is not supported on this device" }
         val recorder = AudioRecord(
             MediaRecorder.AudioSource.MIC,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuffer, frameSamples * 2 * 10),
+            maxOf(minBuffer, FRAME * 2 * 16),
         )
         if (recorder.state != AudioRecord.STATE_INITIALIZED) {
             recorder.release()
             error("Microphone unavailable")
         }
 
-        val frame = ShortArray(frameSamples)
-        val noiseHistory = DoubleArray(NOISE_WINDOW_FRAMES)
-        var historyCount = 0
-        var historyPos = 0
+        var vadMode = modeFor(sensitivity())
+        var vad: VadSilero? = createVad(vadMode)
+        val energy = EnergyVad()
+
+        val frame = ShortArray(FRAME)
         val preRoll = ArrayDeque<ShortArray>()
         val segment = ByteArrayOutputStream()
         var inSpeech = false
+        var speechRun = 0
         var voicedFrames = 0
         var silentFrames = 0
         var segmentFrames = 0
@@ -56,32 +62,31 @@ class SpeechSegmenter(
         try {
             recorder.startRecording()
             while (isActive) {
-                val read = recorder.read(frame, 0, frameSamples)
-                if (read <= 0) continue
-                val chunk = frame.copyOf(read)
-                val rms = rms(chunk)
-
-                noiseHistory[historyPos] = rms
-                historyPos = (historyPos + 1) % NOISE_WINDOW_FRAMES
-                if (historyCount < NOISE_WINDOW_FRAMES) historyCount++
-                val noiseFloor = percentile(noiseHistory, historyCount, NOISE_PERCENTILE)
-
+                if (!readFully(recorder, frame)) continue
+                val chunk = frame.copyOf()
                 val s = sensitivity().coerceIn(0f, 1f)
-                val threshold = maxOf(noiseFloor * (3.0 - 1.8 * s), MIN_RMS + (1f - s) * 400.0)
-                val voiced = rms > threshold
-                onLevel((rms / 8000.0).coerceIn(0.0, 1.0).toFloat())
+                onLevel((rms(chunk) / 7000.0).coerceIn(0.0, 1.0).toFloat())
+
+                val wanted = modeFor(s)
+                if (wanted != vadMode) {
+                    vad?.close()
+                    vad = createVad(wanted)
+                    vadMode = wanted
+                }
+                val voiced = vad?.let { v -> runCatching { v.isSpeech(chunk) }.getOrNull() } ?: energy.isSpeech(chunk, s)
 
                 if (!inSpeech) {
                     preRoll.addLast(chunk)
                     while (preRoll.size > PRE_ROLL_FRAMES) preRoll.removeFirst()
-                    if (voiced) {
+                    speechRun = if (voiced) speechRun + 1 else 0
+                    if (speechRun >= START_FRAMES) {
                         inSpeech = true
                         segment.reset()
                         preRoll.forEach { segment.writePcm(it) }
+                        segmentFrames = preRoll.size
                         preRoll.clear()
-                        voicedFrames = 1
+                        voicedFrames = speechRun
                         silentFrames = 0
-                        segmentFrames = 1
                     }
                 } else {
                     segment.writePcm(chunk)
@@ -95,40 +100,52 @@ class SpeechSegmenter(
                     val endBySilence = silentFrames >= HANGOVER_FRAMES
                     val endByLength = segmentFrames >= MAX_SEGMENT_FRAMES
                     if (endBySilence || endByLength) {
-                        if (voicedFrames >= MIN_VOICED_FRAMES) {
-                            onSegment(pcm16ToWav(segment.toByteArray(), SAMPLE_RATE))
-                        }
+                        if (voicedFrames >= MIN_VOICED_FRAMES) onSegment(pcm16ToWav(segment.toByteArray()))
                         segment.reset()
-                        // If someone is still talking at the length limit, continue straight away.
-                        inSpeech = endByLength && voiced
-                        voicedFrames = if (inSpeech) 1 else 0
+                        inSpeech = false
+                        speechRun = if (endByLength && voiced) START_FRAMES - 1 else 0
+                        voicedFrames = 0
                         silentFrames = 0
-                        segmentFrames = if (inSpeech) 1 else 0
+                        segmentFrames = 0
                     }
                 }
             }
         } finally {
             runCatching { recorder.stop() }
             recorder.release()
+            vad?.close()
             onLevel(0f)
         }
     }
 
-    private fun rms(samples: ShortArray): Double {
-        if (samples.isEmpty()) return 0.0
-        var sum = 0.0
-        for (v in samples) {
-            val d = v.toDouble()
-            sum += d * d
-        }
-        return sqrt(sum / samples.size)
+    private fun createVad(mode: Mode): VadSilero? = try {
+        VadSilero(
+            context,
+            sampleRate = SampleRate.SAMPLE_RATE_16K,
+            frameSize = FrameSize.FRAME_SIZE_512,
+            mode = mode,
+            speechDurationMs = 0,
+            silenceDurationMs = 0,
+        )
+    } catch (t: Throwable) {
+        null
     }
 
-    private fun percentile(values: DoubleArray, count: Int, p: Double): Double {
-        if (count == 0) return 0.0
-        val sorted = values.copyOf(count).also { it.sort() }
-        val index = ((count - 1) * p).toInt().coerceIn(0, count - 1)
-        return sorted[index]
+    /** Higher sensitivity → more permissive detector. */
+    private fun modeFor(sensitivity: Float): Mode = when {
+        sensitivity >= 0.66f -> Mode.NORMAL
+        sensitivity >= 0.33f -> Mode.AGGRESSIVE
+        else -> Mode.VERY_AGGRESSIVE
+    }
+
+    private fun readFully(recorder: AudioRecord, buffer: ShortArray): Boolean {
+        var offset = 0
+        while (offset < buffer.size) {
+            val n = recorder.read(buffer, offset, buffer.size - offset)
+            if (n <= 0) return false
+            offset += n
+        }
+        return true
     }
 
     private fun ByteArrayOutputStream.writePcm(samples: ShortArray) {
@@ -139,31 +156,56 @@ class SpeechSegmenter(
         }
     }
 
+    /** Volume-based fallback detector with an adaptive noise floor. */
+    private class EnergyVad {
+        private val history = DoubleArray(94) // ~3 s of 32 ms frames
+        private var count = 0
+        private var pos = 0
+
+        fun isSpeech(frame: ShortArray, sensitivity: Float): Boolean {
+            val level = rms(frame)
+            history[pos] = level
+            pos = (pos + 1) % history.size
+            if (count < history.size) count++
+            val sorted = history.copyOf(count).also { it.sort() }
+            val floor = sorted[((count - 1) * 0.2).toInt().coerceIn(0, count - 1)]
+            val threshold = maxOf(floor * (3.0 - 1.8 * sensitivity), 200.0 + (1f - sensitivity) * 400.0)
+            return level > threshold
+        }
+    }
+
     companion object {
         const val SAMPLE_RATE = 16_000
-        private const val FRAME_MS = 30
-        private const val NOISE_WINDOW_FRAMES = 100 // ~3 s
-        private const val NOISE_PERCENTILE = 0.2
-        private const val PRE_ROLL_FRAMES = 10 // ~300 ms kept before speech starts
-        private const val HANGOVER_FRAMES = 25 // ~750 ms of silence ends a segment
-        private const val MAX_SEGMENT_FRAMES = 400 // ~12 s max per request
-        private const val MIN_VOICED_FRAMES = 12 // ~360 ms of voice to be worth sending
-        private const val MIN_RMS = 200.0
+        private const val FRAME = 512 // 32 ms
+        private const val PRE_ROLL_FRAMES = 10 // ~320 ms kept before speech starts
+        private const val START_FRAMES = 2 // ~64 ms of voice starts a segment
+        private const val HANGOVER_FRAMES = 15 // ~480 ms of silence ends a segment
+        private const val MAX_SEGMENT_FRAMES = 280 // ~9 s max per request
+        private const val MIN_VOICED_FRAMES = 8 // ~256 ms of voice to be worth sending
 
-        /** Wraps 16-bit mono PCM in a minimal WAV container. */
-        fun pcm16ToWav(pcm: ByteArray, sampleRate: Int): ByteArray {
+        private fun rms(samples: ShortArray): Double {
+            if (samples.isEmpty()) return 0.0
+            var sum = 0.0
+            for (v in samples) {
+                val d = v.toDouble()
+                sum += d * d
+            }
+            return sqrt(sum / samples.size)
+        }
+
+        fun pcm16ToWav(pcm: ByteArray, sampleRate: Int = SAMPLE_RATE): ByteArray {
             val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
                 put("RIFF".toByteArray(Charsets.US_ASCII))
                 putInt(36 + pcm.size)
                 put("WAVE".toByteArray(Charsets.US_ASCII))
                 put("fmt ".toByteArray(Charsets.US_ASCII))
                 putInt(16)
-                putShort(1.toShort()) // PCM
-                putShort(1.toShort()) // mono
+                putShort(1.toShort())
+                putShort(1.toShort())
                 putInt(sampleRate)
-                putInt(sampleRate * 2) // byte rate
-                putShort(2.toShort()) // block align
-                putShort(16.toShort()) // bits per sample
+                putInt(sampleRate * 2)
+                putShort(2.toShort())
+                putShort(16.toShort())
                 put("data".toByteArray(Charsets.US_ASCII))
                 putInt(pcm.size)
             }

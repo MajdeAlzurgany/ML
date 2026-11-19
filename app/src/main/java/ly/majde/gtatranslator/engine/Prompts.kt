@@ -1,140 +1,140 @@
 package ly.majde.gtatranslator.engine
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import ly.majde.gtatranslator.data.DetailLevel
-import ly.majde.gtatranslator.data.GeminiException
 import ly.majde.gtatranslator.data.OutputStyle
-import org.json.JSONArray
-import org.json.JSONObject
 
-data class ParsedItem(
+data class ParsedLine(
     val original: String,
     val speaker: String,
     val translation: String,
     val explanation: String,
     val slang: List<SlangTerm>,
-    val kind: String,
 )
 
-object Prompts {
-
-    private fun styleText(style: OutputStyle) = when (style) {
-        OutputStyle.LIBYAN ->
-            "natural Libyan Arabic dialect (Tripoli style), written in Arabic script, the way a Libyan friend would say it"
-        OutputStyle.MSA -> "clear, natural Modern Standard Arabic"
-    }
-
-    private fun detailText(detail: DetailLevel) = when (detail) {
-        DetailLevel.SHORT -> "one or two short sentences"
-        DetailLevel.DETAILED -> "two to four sentences"
-    }
-
-    fun system(style: OutputStyle, detail: DetailLevel): String = """
-        You are a real-time companion translator for the video game Grand Theft Auto VI
-        (set in Leonida, Rockstar's fictional Florida, including Vice City; lead characters Jason and Lucia).
-        The player is an Arabic speaker from Libya who plays on a console while you help through their phone.
-
-        The input is one of: OCR text of on-screen subtitles (may contain OCR mistakes and HUD noise),
-        a photo of a TV screen, or a short audio clip of game audio (voices mixed with music, gunfire, traffic).
-
-        For every spoken line or meaningful on-screen sentence you find, output one item:
-        - "original": the exact English (or Spanish) line, cleaned up. Fix obvious OCR errors (I/l, missing apostrophes, broken words). Never invent lines that are not present.
-        - "speaker": the speaker's name only if it is shown or obvious, otherwise "".
-        - "translation": the line in ${styleText(style)}. Keep character, place and brand names as they are. Preserve the tone (sarcasm, threats, jokes, flirting). For vulgar lines, convey the meaning with an equivalent Arabic register, never more graphic than the original.
-        - "explanation": ${detailText(detail)} in the same Arabic variety explaining what the line really means: subtext, sarcasm, jokes, American / Florida / Latino cultural or pop-culture references, and why the character says it. If the line is plain, keep it very short.
-        - "slang": slang words, idioms, Spanish words, abbreviations or references from the line, each with a short Arabic meaning. Empty list if none.
-        - "kind": "dialogue" for spoken lines or subtitles, "objective" for mission instructions or help text, "other" for any other meaningful text.
-
-        Ignore money counters, timers, button prompts such as "Press X", menu labels, stray single words and anything unreadable.
-        In audio, ignore music and song lyrics completely: only process spoken dialogue.
-        If nothing meaningful is present, return {"items": []}.
-        Respond only with JSON matching the schema.
-    """.trimIndent()
-
-    fun deepSystem(style: OutputStyle): String = """
-        You are an expert in American English slang, Florida and Latino culture, and the Grand Theft Auto series.
-        Explain a line from Grand Theft Auto VI to an Arabic-speaking player in ${styleText(style)}.
-        Be friendly and concise (about 120 words). Plain text only, no markdown headings; you may use short bullet points starting with "•".
-        Do not reveal story spoilers beyond the line itself.
-    """.trimIndent()
-
-    fun deepUser(entry: TranslationEntry): String = buildString {
-        append("Line: \"").append(entry.original).append("\"\n")
-        if (entry.speaker.isNotBlank()) append("Speaker: ").append(entry.speaker).append('\n')
-        append("Current translation: ").append(entry.translation).append("\n\n")
-        append("Explain in more depth: the exact meaning, tone and subtext, any slang, idioms or wordplay, ")
-        append("cultural references, and give one or two alternative ways to say it in Arabic.")
-    }
-
-    fun responseSchema(): JSONObject = JSONObject(SCHEMA)
-
-    fun parseItems(raw: String): List<ParsedItem> {
-        val cleaned = raw.trim()
-            .removePrefix("```json")
-            .removePrefix("```")
-            .removeSuffix("```")
-            .trim()
-        val items: JSONArray = try {
-            if (cleaned.startsWith("[")) JSONArray(cleaned)
-            else JSONObject(cleaned).optJSONArray("items") ?: JSONArray()
-        } catch (e: Exception) {
-            throw GeminiException(GeminiException.Kind.PARSE, "Could not parse model output")
-        }
-        val result = mutableListOf<ParsedItem>()
-        for (i in 0 until items.length()) {
-            val o = items.optJSONObject(i) ?: continue
-            val slang = mutableListOf<SlangTerm>()
-            val slangArr = o.optJSONArray("slang")
-            if (slangArr != null) {
-                for (j in 0 until slangArr.length()) {
-                    val s = slangArr.optJSONObject(j) ?: continue
-                    val term = s.optString("term").trim()
-                    if (term.isNotEmpty()) slang += SlangTerm(term, s.optString("meaning").trim())
-                }
-            }
-            result += ParsedItem(
-                original = o.optString("original").trim(),
-                speaker = o.optString("speaker").trim(),
-                translation = o.optString("translation").trim(),
-                explanation = o.optString("explanation").trim(),
-                slang = slang,
-                kind = o.optString("kind", "dialogue").trim().ifEmpty { "dialogue" },
-            )
-        }
-        return result
-    }
-
-    private const val SCHEMA = """
-{
-  "type": "OBJECT",
-  "properties": {
-    "items": {
-      "type": "ARRAY",
-      "items": {
-        "type": "OBJECT",
-        "properties": {
-          "original": { "type": "STRING" },
-          "speaker": { "type": "STRING" },
-          "translation": { "type": "STRING" },
-          "explanation": { "type": "STRING" },
-          "slang": {
-            "type": "ARRAY",
-            "items": {
-              "type": "OBJECT",
-              "properties": {
-                "term": { "type": "STRING" },
-                "meaning": { "type": "STRING" }
-              },
-              "required": ["term", "meaning"]
-            }
-          },
-          "kind": { "type": "STRING" }
-        },
-        "required": ["original", "translation", "explanation", "slang", "kind"],
-        "propertyOrdering": ["original", "speaker", "translation", "explanation", "slang", "kind"]
-      }
-    }
-  },
-  "required": ["items"]
+private fun styleText(style: OutputStyle) = when (style) {
+    OutputStyle.LIBYAN -> "natural Libyan Arabic dialect (Tripoli style) written in Arabic script, the way a Libyan friend would say it"
+    OutputStyle.MSA -> "clear, natural Modern Standard Arabic"
 }
-"""
+
+/**
+ * Line translation uses a compact tagged format instead of JSON: it streams nicely
+ * (the translation shows up while it is being written) and is cheap in tokens.
+ */
+object LinePrompt {
+
+    fun system(style: OutputStyle, detail: DetailLevel): String {
+        val why = when (detail) {
+            DetailLevel.SHORT -> "one short sentence"
+            DetailLevel.DETAILED -> "two or three sentences"
+        }
+        return """
+            You translate dialogue from the video game Grand Theft Auto VI (Leonida is Rockstar's version of Florida, with Vice City; the leads are Jason and Lucia) for an Arabic-speaking player from Libya.
+            Translate into ${styleText(style)}.
+            Reply in EXACTLY this format and nothing else:
+            ORIGINAL: <the line in clean English or Spanish; silently fix obvious OCR or speech-recognition errors>
+            SPEAKER: <speaker name if it is shown, otherwise ->
+            AR: <natural translation; keep names as they are; keep the tone, sarcasm and humor; for profanity use an equivalent register, never more graphic>
+            WHY: <$why explaining the real meaning, subtext, joke, slang or cultural reference; "-" if the line is obvious>
+            SLANG: <term = short Arabic meaning | term = meaning ... or ->
+            If the input is not dialogue or a meaningful game sentence (HUD numbers, menus, button prompts, song lyrics, gibberish), reply only: SKIP
+        """.trimIndent()
+    }
+
+    fun userText(line: String, context: List<String>): String = buildString {
+        if (context.isNotEmpty()) {
+            append("Earlier lines (context only):\n")
+            context.forEach { append("- ").append(it).append('\n') }
+            append('\n')
+        }
+        append("LINE: ").append(line)
+    }
+
+    fun userImage(context: List<String>): String = buildString {
+        if (context.isNotEmpty()) {
+            append("Earlier lines (context only):\n")
+            context.forEach { append("- ").append(it).append('\n') }
+            append('\n')
+        }
+        append("This is a photo of the TV. Read every subtitle or dialogue line and any mission objective text. ")
+        append("Output one block in the format above for each, separated by a line containing only ---. ")
+        append("If there is nothing to translate, reply only: SKIP")
+    }
+
+    fun isSkip(raw: String): Boolean = raw.trim().trimStart('*', ' ').uppercase().startsWith("SKIP")
+
+    private val tag = Regex("^\\s*\\**\\s*(ORIGINAL|SPEAKER|AR|WHY|SLANG)\\s*\\**\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)
+    private val separator = Regex("(?m)^\\s*-{3,}\\s*$")
+
+    fun parse(raw: String): List<ParsedLine> = raw.split(separator).mapNotNull { parseBlock(it) }
+
+    fun parseFirst(raw: String): ParsedLine? = parse(raw).firstOrNull()
+
+    private fun parseBlock(block: String): ParsedLine? {
+        val fields = LinkedHashMap<String, StringBuilder>()
+        var current: String? = null
+        for (line in block.lines()) {
+            val m = tag.find(line)
+            if (m != null) {
+                val key = m.groupValues[1].uppercase()
+                current = key
+                fields[key] = StringBuilder(m.groupValues[2].trim())
+            } else if (current != null && line.isNotBlank()) {
+                fields[current]?.append(' ')?.append(line.trim())
+            }
+        }
+        if (fields.isEmpty()) return null
+        fun field(key: String): String {
+            val v = fields[key]?.toString()?.trim().orEmpty()
+            return if (v == "-" || v == "—" || v.equals("none", ignoreCase = true)) "" else v
+        }
+        val slang = field("SLANG").split('|').mapNotNull { part ->
+            val idx = part.indexOf('=')
+            if (idx <= 0) return@mapNotNull null
+            val term = part.substring(0, idx).trim()
+            val meaning = part.substring(idx + 1).trim()
+            if (term.isEmpty() || meaning.isEmpty()) null else SlangTerm(term, meaning)
+        }
+        return ParsedLine(
+            original = field("ORIGINAL"),
+            speaker = field("SPEAKER"),
+            translation = field("AR"),
+            explanation = field("WHY"),
+            slang = slang,
+        )
+    }
+}
+
+object ChatPrompt {
+
+    fun system(style: OutputStyle, transcript: String): String {
+        val header = """
+            You are the player's smart companion for the video game Grand Theft Auto VI, chatting in ${styleText(style)}.
+            You help them understand the story, the characters and their relationships, the dialogue, slang, jokes, and American / Florida / Latino culture references.
+            Below is the transcript of the dialogue the player has actually seen so far (oldest first), with translations. Treat it as your main source about the story.
+            Do not spoil events beyond what the player has seen unless they explicitly ask for spoilers. If you are not sure about something, say so honestly instead of inventing it.
+            Answer clearly and warmly. Use short paragraphs or bullet points. Keep English quotes short.
+        """.trimIndent()
+        val body = transcript.ifBlank { "(empty: the player has not translated any dialogue yet)" }
+        return "$header\n\nTRANSCRIPT:\n$body"
+    }
+
+    private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
+
+    /** Builds the transcript from the newest lines backwards until [maxChars]. */
+    fun transcript(linesNewestFirst: List<LiveLine>, maxChars: Int): String {
+        val picked = ArrayList<String>()
+        var used = 0
+        for (line in linesNewestFirst) {
+            if (line.original.isBlank()) continue
+            val speaker = if (line.speaker.isNotBlank()) "${line.speaker}: " else ""
+            val entry = "[${timeFormat.format(Date(line.timestamp))}] $speaker\"${line.original}\" → ${line.bestTranslation}"
+            if (used + entry.length > maxChars) break
+            picked += entry
+            used += entry.length + 1
+        }
+        return picked.asReversed().joinToString("\n")
+    }
 }

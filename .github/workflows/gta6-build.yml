@@ -29,6 +29,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Fetch Tajawal font (SIL Open Font License)
+        run: |
+          set -e
+          mkdir -p app/src/main/res/font app/src/main/assets/licenses
+          base="https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal"
+          for w in Regular Medium Bold ExtraBold; do
+            lower=$(echo "$w" | tr '[:upper:]' '[:lower:]')
+            curl -fsSL --retry 3 -o "app/src/main/res/font/tajawal_${lower}.ttf" "$base/Tajawal-$w.ttf"
+          done
+          curl -fsSL --retry 3 -o app/src/main/assets/licenses/Tajawal-OFL.txt "$base/OFL.txt"
+          ls -la app/src/main/res/font
+
       - name: Prepare signing keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}

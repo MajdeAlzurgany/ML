@@ -27,7 +27,12 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+        versionName = System.getenv("VERSION_NAME") ?: "2.0.0"
+        // ML Kit and ONNX Runtime ship large native libraries; virtually all
+        // current phones are 64-bit ARM, so we keep the APK small.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {
@@ -90,15 +95,19 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-    implementation(libs.androidx.camera.mlkit.vision)
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.translate)
+    implementation(libs.mlkit.language.id)
+    implementation(libs.android.vad.silero)
 
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
 }

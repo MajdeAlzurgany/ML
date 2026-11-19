@@ -4,6 +4,8 @@ enum class OutputStyle { LIBYAN, MSA }
 
 enum class DetailLevel { SHORT, DETAILED }
 
+enum class LiveMode { CAMERA, MIC }
+
 /** Region of the camera preview (normalized 0..1) where subtitles are read. */
 data class NormRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
 
@@ -36,22 +38,31 @@ data class NormRect(val left: Float, val top: Float, val right: Float, val botto
     }
 
     companion object {
-        const val MIN_SIZE = 0.08f
-        val DEFAULT = NormRect(0.04f, 0.60f, 0.96f, 0.92f)
+        const val MIN_SIZE = 0.06f
+        val DEFAULT = NormRect(0.04f, 0.62f, 0.96f, 0.94f)
     }
 }
 
 data class AppSettings(
-    val apiKey: String = "",
-    val model: String = DEFAULT_MODEL,
+    val groqKey: String = "",
+    val geminiKey: String = "",
+    /** Empty = choose automatically. */
+    val groqModel: String = "",
+    val geminiModel: String = DEFAULT_GEMINI_MODEL,
     val style: OutputStyle = OutputStyle.LIBYAN,
     val detail: DetailLevel = DetailLevel.SHORT,
-    val requestsPerMinute: Int = 8,
     val micSensitivity: Float = 0.5f,
     val roi: NormRect = NormRect.DEFAULT,
+    val liveMode: LiveMode = LiveMode.CAMERA,
+    val textScale: Float = 1f,
+    val showOriginal: Boolean = true,
+    val speak: Boolean = false,
+    val webSearch: Boolean = true,
+    val onboardingDone: Boolean = false,
 ) {
+    val hasAnyKey: Boolean get() = groqKey.isNotBlank() || geminiKey.isNotBlank()
+
     companion object {
-        /** Google's alias that always points at the latest Flash model. */
-        const val DEFAULT_MODEL = "gemini-flash-latest"
+        const val DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
     }
 }

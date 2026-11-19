@@ -3,10 +3,22 @@
     <string name="app_name">مترجم GTA VI</string>
 
     <!-- Tabs -->
-    <string name="tab_camera">الكاميرا</string>
-    <string name="tab_listen">الاستماع</string>
-    <string name="tab_type">كتابة</string>
+    <string name="tab_live">مباشر</string>
+    <string name="tab_chat">اسأل</string>
+    <string name="tab_history">السجل</string>
     <string name="tab_settings">الإعدادات</string>
+
+    <!-- Common -->
+    <string name="clear">مسح</string>
+    <string name="cancel">إلغاء</string>
+    <string name="dismiss">إخفاء</string>
+    <string name="next">التالي</string>
+    <string name="back">رجوع</string>
+    <string name="skip">تخطي</string>
+    <string name="download">تحميل</string>
+    <string name="start_now">يلا نبدو 🎮</string>
+    <string name="recommended">مُوصى به</string>
+    <string name="optional">اختياري</string>
 
     <!-- Permissions -->
     <string name="perm_camera_title">نحتاج الكاميرا</string>
@@ -16,74 +28,128 @@
     <string name="perm_allow">اسمح</string>
     <string name="perm_open_settings">فتح إعدادات التطبيق</string>
 
-    <!-- Camera -->
+    <!-- Live -->
+    <string name="live_title">ترجمة مباشرة</string>
+    <string name="live_translating">يترجم…</string>
+    <string name="mode_camera">الكاميرا</string>
+    <string name="mode_mic">الصوت</string>
     <string name="camera_pause">إيقاف مؤقت</string>
     <string name="camera_resume">كمّل</string>
     <string name="camera_paused">متوقف مؤقتًا</string>
+    <string name="camera_searching">قاعد يدوّر على الـ subtitles داخل المربع…</string>
+    <string name="camera_resize">تكبير أو تصغير الكاميرا</string>
     <string name="snap">صوّر واشرح</string>
     <string name="zoom">تقريب</string>
-    <string name="camera_empty_hint">ثبّت الموبايل قدام الشاشة وخلي المربع الوردي على مكان الـ subtitles.\nاسحب المربع باش تحركه، واسحب النقاط باش تكبره أو تصغره.\nلو الكتابة صعبة، دوس على زر التصوير.</string>
-    <string name="live_text_label">قاعد يقرا:</string>
-
-    <!-- Listen -->
-    <string name="listening_on">قاعد يسمع… الحوار يتترجم أول بأول</string>
-    <string name="listening_off">دوس باش يبدا يسمع حوار اللعبة</string>
+    <string name="listening_on">قاعد يسمع… أي حوار يتترجم طول</string>
+    <string name="listening_off">دوس على الدائرة باش يبدا يسمع</string>
     <string name="mic_sensitivity">الحساسية</string>
-    <string name="listen_tip">حط الموبايل قريب من السماعة. نصيحة: نقص صوت الموسيقى في إعدادات اللعبة وعلّي صوت الحوار باش الدقة تزيد.</string>
-    <string name="mic_error">ما قدرناش نفتحو المايك. سكّر أي تطبيق ثاني يستعمل المايك وعاود.</string>
-    <string name="listen_empty_hint">أول ما شخصية تهدرز، الترجمة والشرح يطلعو هني.</string>
+    <string name="empty_camera">ثبّت الموبايل قدام الشاشة وحط المربع الوردي على مكان الـ subtitles.\nاسحبه باش تحركه، واسحب النقاط باش تغيّر حجمه.\nكل جملة تطلع هني فوراً، وبعدها تتحسن بالذكاء الاصطناعي.</string>
+    <string name="empty_mic">حط الموبايل قريب من السماعة ودوس على الدائرة.\nنصيحة: نقّص صوت الموسيقى في إعدادات اللعبة وعلّي الحوار.</string>
 
-    <!-- Manual -->
-    <string name="manual_hint">اكتب أو الصق جملة من اللعبة…</string>
-    <string name="manual_send">ترجم واشرح</string>
-    <string name="manual_empty_hint">اكتب أي جملة أو كلمة سمعتها في اللعبة وتوا نشرحها لك.</string>
+    <!-- Line status & actions -->
+    <string name="status_instant">فوري</string>
+    <string name="status_ai">ذكاء اصطناعي</string>
+    <string name="status_offline">ترجمة الجهاز</string>
+    <string name="action_ask">اسأل عنها</string>
+    <string name="action_speak">اقرا بصوت</string>
+    <string name="action_copy">نسخ</string>
+    <string name="action_retry">حسّن الترجمة</string>
 
-    <!-- Card -->
-    <string name="explain_more">اشرح أكثر</string>
-    <string name="copy">نسخ</string>
-    <string name="copied">تم النسخ</string>
-    <string name="kind_objective">مهمة</string>
-    <string name="clear_history">مسح</string>
-
-    <!-- Status -->
-    <string name="status_working">يترجم… (في الطابور: %1$d)</string>
-    <string name="notice_no_key">حط مفتاح Gemini المجاني من الإعدادات باش نبدو.</string>
-    <string name="notice_invalid_key">المفتاح غلط أو مش مفعّل. تأكد منه في الإعدادات.</string>
-    <string name="notice_rate_limit">وصلت لحد الطلبات المجاني في الدقيقة — نكمل بعد %1$d ث.</string>
-    <string name="notice_daily_quota">خلصت الحصة اليومية المجانية للموديل هذا. اختار موديل ثاني (مثلاً flash-lite) من الإعدادات أو استنى لبكرة.</string>
-    <string name="notice_blocked">Gemini رفض المقطع هذا (فلتر أمان). المقطع الجاي يمشي عادي.</string>
-    <string name="notice_network">مشكلة في الإنترنت. تأكد من الاتصال.</string>
-    <string name="notice_server">سيرفرات Gemini مضغوطة توا، نعاودو نحاولو.</string>
-    <string name="notice_model_not_found">الموديل هذا مش موجود. اختار موديل من الإعدادات.</string>
-    <string name="notice_region">Gemini API مش متاح من موقعك الحالي.</string>
-    <string name="notice_bad_request">صار خطأ في الطلب: %1$s</string>
-    <string name="notice_parse">جانا رد مش مفهوم من Gemini، نكملو في اللي بعده.</string>
+    <!-- Notices -->
+    <string name="notice_no_key">زيد مفتاح Groq أو Gemini المجاني من الإعدادات باش الترجمة تكون أذكى وتشتغل ميزة الصوت.</string>
+    <string name="notice_offline_only">قاعد نترجم بترجمة الجهاز بس. زيد مفتاح مجاني من الإعدادات لترجمة أذكى مع شرح.</string>
+    <string name="notice_invalid_key">المفتاح غلط أو موقوف. راجعه في الإعدادات.</string>
+    <string name="notice_rate_limit">النماذج المجانية مضغوطة شوية، قاعد نبدّل بينهم أوتوماتيك. ترجمة الجهاز شغالة في الأثناء.</string>
+    <string name="notice_daily_limit">خلصت الحصة اليومية لبعض النماذج المجانية. التطبيق يبدّل لنموذج ثاني، وترجمة الجهاز شغالة دايماً.</string>
+    <string name="notice_network">مشكلة في الإنترنت. ترجمة الجهاز شغالة بدون نت.</string>
+    <string name="notice_server">السيرفر مضغوط توا، نعاود نحاول أوتوماتيك.</string>
+    <string name="notice_region">الخدمة مش متاحة من موقعك الحالي. جرّب المزود الثاني.</string>
+    <string name="notice_blocked">المقطع هذا انرفض من فلتر الأمان. المقطع الجاي يمشي عادي.</string>
     <string name="notice_nothing_found">ما لقيتش حوار واضح.</string>
-    <string name="dismiss">إخفاء</string>
+    <string name="notice_mic_error">ما قدرناش نفتحو المايك. سكّر أي تطبيق ثاني يستعمله وعاود.</string>
+    <string name="notice_bad_request">صار خطأ في الطلب: %1$s</string>
+
+    <!-- Chat -->
+    <string name="chat_title">اسأل عن القصة</string>
+    <string name="chat_subtitle">يعرف كل الحوار اللي شفته (%1$d جملة)</string>
+    <string name="chat_hint">اسأل على أي حاجة في القصة أو الحوار…</string>
+    <string name="chat_send">إرسال</string>
+    <string name="chat_stop">إيقاف</string>
+    <string name="chat_explain_line">اشرحلي الجملة هذي بالتفصيل: شن تقصد الشخصية، وشن المقصود منها في القصة؟</string>
+    <string name="chat_empty_title">مش فاهم حاجة في القصة؟</string>
+    <string name="chat_empty_body">اسألني زي ما تسأل صاحبك. نعرف كل الحوار اللي تترجم معاك.</string>
+    <string name="chat_suggest_summary">لخصلي القصة لين توا</string>
+    <string name="chat_suggest_characters">شكون الشخصيات اللي ظهرت؟</string>
+    <string name="chat_suggest_last_line">شن معنى آخر جملة؟</string>
+    <string name="chat_suggest_joke">اشرحلي النكتة الأخيرة</string>
+    <string name="chat_suggest_slang">شن أهم كلمات الـ slang اللي جت؟</string>
+
+    <!-- History -->
+    <string name="history_title">السجل</string>
+    <string name="history_count">%1$d جملة مترجمة</string>
+    <string name="history_search">دوّر في الحوار…</string>
+    <string name="history_empty">لين توا ما فيش حوار مترجم.</string>
+    <string name="history_clear_title">نمسح السجل؟</string>
+    <string name="history_clear_body">كل الجمل المترجمة تنمسح، ودردشة القصة تنسى سياق اللي فات.</string>
 
     <!-- Settings -->
     <string name="settings_title">الإعدادات</string>
-    <string name="section_key">مفتاح Gemini (مجاني)</string>
-    <string name="key_help">التطبيق مجاني ويستعمل مفتاحك الخاص من Google AI Studio (ما يحتاجش بطاقة). المفتاح يتخزن مشفّر في جهازك بس.</string>
-    <string name="key_label">Gemini API Key</string>
+    <string name="section_ai">محركات الذكاء الاصطناعي (مجانية)</string>
+    <string name="ai_help">زيد مفتاح واحد على الأقل. التطبيق يستعمل أسرع نموذج مجاني متاح، ولو واحد خلصت حصته يبدّل للثاني أوتوماتيك. المفاتيح تتخزن مشفّرة في جهازك بس.</string>
+    <string name="groq_title">Groq</string>
+    <string name="groq_subtitle">الأسرع: ترجمة في أقل من ثانية، ومعاه تفريغ الصوت Whisper.</string>
+    <string name="gemini_title">Google Gemini</string>
+    <string name="gemini_subtitle">أذكى في الدردشة عن القصة، ويقرا صور الشاشة، ويقدر يدوّر في النت.</string>
+    <string name="api_key">API Key</string>
     <string name="save_and_test">حفظ واختبار</string>
     <string name="get_free_key">جيب مفتاح مجاني</string>
     <string name="key_checking">قاعد نتأكد من المفتاح…</string>
-    <string name="key_ok">المفتاح شغال ✅ (%1$d موديل متاح)</string>
+    <string name="key_ok">المفتاح شغال ✅ (%1$d نموذج متاح)</string>
     <string name="key_failed">المفتاح ما مشاش ❌</string>
-    <string name="section_model">الموديل</string>
-    <string name="model_label">اسم الموديل</string>
-    <string name="model_apply">تطبيق</string>
-    <string name="model_help">الافتراضي gemini-flash-latest يتحدّث أوتوماتيك لأحدث Flash. لو خلصت الحصة، جرب نسخة flash-lite.</string>
+    <string name="section_models">النماذج (متقدم)</string>
+    <string name="groq_model">نموذج Groq</string>
+    <string name="gemini_model">نموذج Gemini</string>
+    <string name="model_auto">تلقائي (الأفضل)</string>
+    <string name="models_help">خليها \"تلقائي\" باش التطبيق يختار ويبدّل بروحه لما تخلص الحصة المجانية.</string>
+    <string name="section_offline">الترجمة الفورية بدون نت</string>
+    <string name="offline_ready">جاهزة ✅ كل جملة تترجم فوراً حتى بدون نت</string>
+    <string name="offline_downloading">قاعد نحمّل حزمة الترجمة الفورية…</string>
+    <string name="offline_failed">ما تحمّلتش حزمة الترجمة. تأكد من النت ودوس تحميل.</string>
+    <string name="offline_failed_short">الترجمة الفورية مش جاهزة</string>
+    <string name="offline_idle">حزمة الترجمة الفورية مش محمّلة</string>
+    <string name="offline_help">نماذج ترجمة Google على جهازك (حوالي 30 ميغا): تعطيك ترجمة أولية في جزء من الثانية، وبعدها الذكاء الاصطناعي يحسّنها.</string>
     <string name="section_language">لغة الترجمة والشرح</string>
     <string name="style_libyan">ليبي (لهجة طرابلسية)</string>
     <string name="style_msa">عربي فصيح</string>
     <string name="detail_short">شرح مختصر</string>
     <string name="detail_detailed">شرح مفصّل</string>
-    <string name="section_quota">سرعة الطلبات</string>
-    <string name="rpm_value">%1$d طلب في الدقيقة</string>
-    <string name="rpm_help">الخطة المجانية تسمح تقريبًا بـ 10 طلبات في الدقيقة. التطبيق يجمع الجمل المتتالية في طلب واحد باش يوفّر.</string>
+    <string name="section_display">العرض</string>
+    <string name="text_size">حجم الخط</string>
+    <string name="text_size_preview">هكي تبان الترجمة</string>
+    <string name="show_original">بيّن الجملة الإنجليزية</string>
+    <string name="speak_translations">اقرا الترجمة بصوت (في وضع الكاميرا)</string>
+    <string name="web_search">خلي Gemini يدوّر في النت لما تسأل عن القصة</string>
     <string name="section_privacy">الخصوصية</string>
-    <string name="privacy_note">الصور والمقاطع الصوتية تمشي لـ Google Gemini للترجمة بس، وما تتخزنش في التطبيق. في الخطة المجانية Google ممكن تستعمل البيانات لتحسين خدماتها.</string>
-    <string name="start_now">يلا نبدو 🎮</string>
+    <string name="privacy_note">الصور والمقاطع الصوتية تمشي لمزود الذكاء الاصطناعي اللي تختاره بس عشان الترجمة. السجل يتخزن في جهازك. في الخطط المجانية، المزودين ممكن يستعملو البيانات لتحسين خدماتهم.</string>
+    <string name="replay_onboarding">عاود الشرح التمهيدي</string>
+
+    <!-- Onboarding -->
+    <string name="onb_tagline">ترجمة فورية وشرح لكل حوار في اللعبة، وتقدر تسأل على القصة.</string>
+    <string name="onb_f1_title">ترجمة في لحظتها</string>
+    <string name="onb_f1_body">الكاميرا تقرا الـ subtitles، وترجمة أولية تطلع في جزء من الثانية وبعدها تتحسن بالذكاء الاصطناعي.</string>
+    <string name="onb_f2_title">يسمع الحوار</string>
+    <string name="onb_f2_body">Whisper وكشف الصوت الذكي يلقطو كلام الشخصيات حتى مع الموسيقى والضجة.</string>
+    <string name="onb_f3_title">اسأل عن القصة</string>
+    <string name="onb_f3_body">دردشة تعرف كل الحوار اللي شفته: الشخصيات، النكت، الـ slang، والمراجع الثقافية.</string>
+    <string name="onb_f4_title">مجاني بالكامل</string>
+    <string name="onb_f4_body">يستعمل مفاتيح مجانية من Groq وGoogle، ويبدّل بينهم أوتوماتيك.</string>
+    <string name="onb_groq_title">مفتاح Groq (الأسرع)</string>
+    <string name="onb_groq_body">Groq يعطيك ترجمة سريعة جداً وتفريغ صوت ممتاز، ومجاني بدون بطاقة.</string>
+    <string name="onb_groq_steps">١. دوس \"جيب مفتاح مجاني\" وسجّل بحساب Google.\n٢. دوس Create API Key وانسخه.\n٣. ارجع والصقه هني ودوس \"حفظ واختبار\".</string>
+    <string name="onb_gemini_title">مفتاح Gemini (اختياري)</string>
+    <string name="onb_gemini_body">يخلي الدردشة عن القصة أذكى، ويقرا صور الشاشة، ويكون بديل لما تخلص حصة Groq.</string>
+    <string name="onb_gemini_steps">١. دوس \"جيب مفتاح مجاني\" وسجّل بحساب Google.\n٢. دوس Create API key وانسخه.\n٣. ارجع والصقه هني ودوس \"حفظ واختبار\".</string>
+    <string name="onb_ready_title">جاهز للعب!</string>
+    <string name="onb_ready_body">فعّل الـ subtitles في اللعبة وخليها كبيرة، وثبّت الموبايل قدام الشاشة. وأي حاجة مش فاهمها اسأل عليها من تبويب \"اسأل\".</string>
+    <string name="onb_no_key_warning">ما زدتش مفتاح: التطبيق يترجم بترجمة الجهاز بس، ومن غير شرح ولا صوت. تقدر تزيده بعدين من الإعدادات.</string>
 </resources>

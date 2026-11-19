@@ -14,3 +14,7 @@
 *.jks
 *.keystore
 keystore.properties
+
+# Fonts are downloaded at build time
+app/src/main/res/font/
+app/src/main/assets/licenses/
