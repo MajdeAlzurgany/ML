@@ -56,7 +56,7 @@ class LiveEngine(
     fun submitText(text: String, source: Source) {
         val clean = text.replace(Regex("\\s+"), " ").trim()
         if (clean.length < 2) return
-        if (source.isLive && isRecentDuplicate(clean)) return
+        if (source.isLive && isRecentDuplicate(clean, source)) return
         val line = LiveLine(id = ids.incrementAndGet(), source = source, original = clean)
         _lines.update { (listOf(line) + it).take(MAX_LINES) }
 
@@ -154,6 +154,9 @@ class LiveEngine(
     fun clear() {
         _lines.value = emptyList()
     }
+
+    /** The live line is the newest one; used by the "save phrase" action. */
+    fun find(id: Long): LiveLine? = _lines.value.firstOrNull { it.id == id }
 
     fun dismissNotice() = clearNotice()
 
@@ -262,14 +265,27 @@ class LiveEngine(
         _lines.value.firstOrNull { it.id == lineId }?.let { _completed.tryEmit(it) }
     }
 
-    private fun isRecentDuplicate(text: String): Boolean {
+    private fun isRecentDuplicate(text: String, source: Source): Boolean {
         val norm = TextSimilarity.normalize(text)
         if (norm.length < 3) return true
         val now = System.currentTimeMillis()
-        return _lines.value
-            .take(DUPLICATE_WINDOW)
+        val recent = _lines.value
+            .take(DUPLICATE_WINDOW + 2)
             .filter { now - it.timestamp < DUPLICATE_WINDOW_MS }
-            .any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.86 }
+        if (recent.any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.86 }) return true
+
+        // Camera + microphone together: the same dialogue often arrives from both sources,
+        // split differently (one audio clip can span two subtitles). Skip a line whose words
+        // are already covered by what the other source captured moments ago.
+        val tokens = norm.split(' ').filter { it.length > 1 }
+        if (tokens.size < 3) return false
+        val pool = recent
+            .filter { it.source != source && now - it.timestamp < CROSS_SOURCE_WINDOW_MS }
+            .flatMap { TextSimilarity.normalize(it.original).split(' ') }
+            .toHashSet()
+        if (pool.isEmpty()) return false
+        val covered = tokens.count { it in pool }.toDouble() / tokens.size
+        return covered >= 0.8
     }
 
     private fun recentOriginals(before: Long): List<String> =
@@ -304,5 +320,6 @@ class LiveEngine(
         const val CONTEXT_LINES = 3
         const val DUPLICATE_WINDOW = 6
         const val DUPLICATE_WINDOW_MS = 45_000L
+        const val CROSS_SOURCE_WINDOW_MS = 25_000L
     }
 }

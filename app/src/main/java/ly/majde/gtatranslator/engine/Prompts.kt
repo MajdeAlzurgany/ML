@@ -109,7 +109,7 @@ object LinePrompt {
 
 object ChatPrompt {
 
-    fun system(style: OutputStyle, transcript: String): String {
+    fun system(style: OutputStyle, transcript: String, characters: List<StoryCharacter> = emptyList()): String {
         val header = """
             You are the player's smart companion for the video game Grand Theft Auto VI, chatting in ${styleText(style)}.
             You help them understand the story, the characters and their relationships, the dialogue, slang, jokes, and American / Florida / Latino culture references.
@@ -118,7 +118,12 @@ object ChatPrompt {
             Answer clearly and warmly. Use short paragraphs or bullet points. Keep English quotes short.
         """.trimIndent()
         val body = transcript.ifBlank { "(empty: the player has not translated any dialogue yet)" }
-        return "$header\n\nTRANSCRIPT:\n$body"
+        val cast = if (characters.isEmpty()) "" else {
+            "\n\nKNOWN CHARACTERS (from the dialogue so far):\n" + characters.joinToString("\n") { c ->
+                "- ${c.name}: ${c.role}" + (if (c.relations.isNotBlank()) " | ${c.relations}" else "")
+            }
+        }
+        return "$header$cast\n\nTRANSCRIPT:\n$body"
     }
 
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
@@ -136,5 +141,48 @@ object ChatPrompt {
             used += entry.length + 1
         }
         return picked.asReversed().joinToString("\n")
+    }
+}
+
+/** Character list and "previously on" recap, both built only from what the player has seen. */
+object StoryPrompt {
+
+    fun charactersSystem(style: OutputStyle): String = """
+        You build a character guide for a player of Grand Theft Auto VI, using ONLY the dialogue transcript provided (what the player has seen so far).
+        Write in ${styleText(style)}. Keep character names in their original Latin spelling.
+        List the characters who speak or are clearly mentioned, most important first (max 12).
+        For each, reply in EXACTLY this format, blocks separated by a line containing only ---:
+        NAME: <name as used in the game>
+        ROLE: <who they are, one sentence>
+        RELATION: <their relation to the main characters, one sentence, or ->
+        LATEST: <the latest thing that happened with them in the transcript, one sentence>
+        Do not invent facts that are not supported by the transcript. No spoilers beyond it.
+    """.trimIndent()
+
+    fun recapSystem(style: OutputStyle): String = """
+        You write a short "previously on" recap for a player returning to Grand Theft Auto VI.
+        Use ONLY the dialogue transcript provided. Write in ${styleText(style)}.
+        Give 4 to 7 short bullet points (start each with "• ") covering what happened most recently and what the current goal seems to be.
+        Mention characters by name. No spoilers beyond the transcript. No introduction, just the bullets.
+    """.trimIndent()
+
+    fun user(transcript: String): String = "TRANSCRIPT (oldest first):\n$transcript"
+
+    private val tag = Regex("^\\s*\\**\\s*(NAME|ROLE|RELATION|LATEST)\\s*\\**\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)
+    private val separator = Regex("(?m)^\\s*-{3,}\\s*$")
+
+    fun parseCharacters(raw: String): List<StoryCharacter> = raw.split(separator).mapNotNull { block ->
+        val fields = HashMap<String, String>()
+        for (line in block.lines()) {
+            val m = tag.find(line) ?: continue
+            fields[m.groupValues[1].uppercase()] = m.groupValues[2].trim()
+        }
+        val name = fields["NAME"].orEmpty().trim('*', ' ')
+        if (name.isEmpty()) {
+            null
+        } else {
+            fun f(k: String) = fields[k].orEmpty().let { if (it == "-") "" else it }
+            StoryCharacter(name = name, role = f("ROLE"), relations = f("RELATION"), latest = f("LATEST"))
+        }
     }
 }

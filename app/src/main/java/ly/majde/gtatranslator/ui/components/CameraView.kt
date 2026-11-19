@@ -49,6 +49,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.roundToInt
 import ly.majde.gtatranslator.camera.RoiOcrAnalyzer
+import ly.majde.gtatranslator.camera.ScanLine
 import ly.majde.gtatranslator.data.NormRect
 
 /** Lets the screen grab the current preview frame for "snap & explain". */
@@ -56,7 +57,15 @@ class CameraHandle {
     @Volatile
     var previewView: PreviewView? = null
 
+    @Volatile
+    internal var analyzer: RoiOcrAnalyzer? = null
+
     fun snapshot(): Bitmap? = previewView?.bitmap
+
+    /** Scans the next frame for text to find where the subtitles are. */
+    fun requestScan() {
+        analyzer?.scanRequested = true
+    }
 }
 
 /**
@@ -69,6 +78,7 @@ fun SubtitleCameraView(
     roi: NormRect,
     zoom: Float,
     onText: (String) -> Unit,
+    onScan: (List<ScanLine>, IntSize) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -77,6 +87,7 @@ fun SubtitleCameraView(
     val roiPx = remember { AtomicReference(RectF()) }
     val viewSize = remember { mutableStateOf(IntSize.Zero) }
     val latestOnText by rememberUpdatedState(onText)
+    val latestOnScan by rememberUpdatedState(onScan)
 
     LaunchedEffect(roi, viewSize.value) {
         val s = viewSize.value
@@ -91,7 +102,9 @@ fun SubtitleCameraView(
             roiInView = { roiPx.get() },
             intervalMs = ANALYSIS_INTERVAL_MS,
             onText = { latestOnText(it) },
+            onScan = { lines -> latestOnScan(lines, viewSize.value) },
         )
+        handle.analyzer = analyzer
         controller.setEnabledUseCases(CameraController.IMAGE_ANALYSIS)
         controller.imageAnalysisBackpressureStrategy = ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
         controller.imageAnalysisResolutionSelector = ResolutionSelector.Builder()
@@ -103,6 +116,7 @@ fun SubtitleCameraView(
         controller.bindToLifecycle(lifecycleOwner)
 
         onDispose {
+            handle.analyzer = null
             controller.clearImageAnalysisAnalyzer()
             controller.unbind()
             recognizer.close()

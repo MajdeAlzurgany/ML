@@ -61,6 +61,7 @@ internal fun OkHttpClient.sseFlow(
     request: Request,
     parseError: (code: Int, body: String, headers: Headers) -> AiException,
     onData: (String) -> String?,
+    onHeaders: (Headers) -> Unit = {},
 ): Flow<String> = flow {
     val call = newCall(request)
     val handle = currentCoroutineContext()[Job]?.invokeOnCompletion { call.cancel() }
@@ -71,6 +72,7 @@ internal fun OkHttpClient.sseFlow(
             throw AiException(AiException.Kind.NETWORK, e.message ?: "Network error")
         }
         response.use { resp ->
+            onHeaders(resp.headers)
             if (!resp.isSuccessful) {
                 val body = resp.body?.string().orEmpty()
                 throw parseError(resp.code, body, resp.headers)

@@ -31,6 +31,11 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
 
     val groq = OpenAiCompatClient("Groq", GROQ_BASE_URL, http)
     val gemini = GeminiClient(http)
+    val quota = QuotaTracker()
+
+    init {
+        groq.headerListener = { model, headers -> quota.onHeaders(groq.providerName, model, headers) }
+    }
 
     private val cooldownUntil = ConcurrentHashMap<String, Long>()
     private val missingModels: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -56,6 +61,7 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
         var lastError: AiException? = null
         for (target in candidates) {
             var started = false
+            quota.onRequest(target.client.providerName, target.model)
             try {
                 target.client.stream(target.apiKey, target.model, system(target), messages(target), options).collect { delta ->
                     if (!started) {
@@ -65,6 +71,7 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
                     emit(AiEvent.Delta(delta))
                 }
                 if (!started) emit(AiEvent.Started(target))
+                quota.onSuccess(target.client.providerName, target.model)
                 return@flow
             } catch (e: CancellationException) {
                 throw e
@@ -91,6 +98,7 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
                 val id = "Groq:$model"
                 if ((cooldownUntil[id] ?: 0L) > now()) continue
                 try {
+                    quota.onRequest(groq.providerName, model)
                     return groq.transcribe(s.groqKey, wav, model, WHISPER_PROMPT)
                 } catch (e: CancellationException) {
                     throw e
@@ -107,6 +115,7 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
                 val t = now()
                 if ((cooldownUntil[target.id] ?: 0L) > t || (cooldownUntil[gemini.providerName] ?: 0L) > t) continue
                 try {
+                    quota.onRequest(gemini.providerName, model)
                     val text = StringBuilder()
                     gemini.stream(
                         apiKey = s.geminiKey,
@@ -196,6 +205,7 @@ class AiRouter(private val settings: StateFlow<AppSettings>, http: OkHttpClient)
             AiException.Kind.RATE_LIMIT -> {
                 val wait = if (e.daily) DAILY_COOLDOWN_MS else (e.retryAfterMs ?: DEFAULT_COOLDOWN_MS).coerceIn(2_000L, 15 * 60_000L)
                 cooldownUntil[target.id] = t + wait
+                quota.onCooldown(target.client.providerName, target.model, t + wait)
             }
             AiException.Kind.MODEL_NOT_FOUND -> missingModels += target.id
             AiException.Kind.INVALID_KEY, AiException.Kind.REGION -> cooldownUntil[target.client.providerName] = t + 5 * 60_000L

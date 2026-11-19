@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CloudOff
@@ -55,7 +57,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ly.majde.gtatranslator.ui.MainViewModel
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -69,7 +75,6 @@ import java.util.Locale
 import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.engine.LineStatus
 import ly.majde.gtatranslator.engine.LiveLine
-import ly.majde.gtatranslator.engine.SlangTerm
 import ly.majde.gtatranslator.engine.Source
 
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.US)
@@ -87,9 +92,7 @@ fun HeroLineCard(
     line: LiveLine,
     textScale: Float,
     showOriginal: Boolean,
-    onAsk: () -> Unit,
-    onSpeak: () -> Unit,
-    onRetry: () -> Unit,
+    actions: LineActionsHandler,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -130,9 +133,47 @@ fun HeroLineCard(
                     color = colors.onSurface.copy(alpha = 0.9f),
                 )
             }
-            if (line.slang.isNotEmpty()) SlangChips(line.slang)
-            LineActions(line, onAsk = onAsk, onSpeak = onSpeak, onRetry = onRetry)
+            if (line.slang.isNotEmpty()) SlangChips(line, actions)
+            LineActions(line, actions)
         }
+    }
+}
+
+/** Callbacks shared by every line card. */
+class LineActionsHandler(
+    val savedTerms: Set<String>,
+    val onAsk: (LiveLine) -> Unit,
+    val onSpeak: (LiveLine) -> Unit,
+    val onRetry: (LiveLine) -> Unit,
+    val onToggleWord: (term: String, meaning: String, line: LiveLine) -> Unit,
+    val onToggleLine: (LiveLine) -> Unit,
+) {
+    fun isSaved(term: String) = term.trim().lowercase() in savedTerms
+}
+
+/** Builds the shared card callbacks, with a short confirmation when saving words. */
+@Composable
+fun rememberLineActions(vm: MainViewModel): LineActionsHandler {
+    val context = LocalContext.current
+    val words by vm.words.collectAsStateWithLifecycle()
+    val saved = remember(words) { words.map { it.term.trim().lowercase() }.toHashSet() }
+    val savedMsg = stringResource(R.string.word_saved)
+    val removedMsg = stringResource(R.string.word_removed)
+    return remember(saved, vm) {
+        LineActionsHandler(
+            savedTerms = saved,
+            onAsk = { vm.ask(it) },
+            onSpeak = { vm.speak(it) },
+            onRetry = { vm.retryLine(it.id) },
+            onToggleWord = { term, meaning, line ->
+                val now = vm.toggleWord(term, meaning, line)
+                Toast.makeText(context, if (now) savedMsg else removedMsg, Toast.LENGTH_SHORT).show()
+            },
+            onToggleLine = { line ->
+                val now = vm.toggleLine(line)
+                Toast.makeText(context, if (now) savedMsg else removedMsg, Toast.LENGTH_SHORT).show()
+            },
+        )
     }
 }
 
@@ -141,9 +182,7 @@ fun HeroLineCard(
 fun CompactLineRow(
     line: LiveLine,
     showOriginal: Boolean,
-    onAsk: () -> Unit,
-    onSpeak: () -> Unit,
-    onRetry: () -> Unit,
+    actions: LineActionsHandler,
     modifier: Modifier = Modifier,
 ) {
     var expanded by rememberSaveable(line.id) { mutableStateOf(false) }
@@ -192,8 +231,8 @@ fun CompactLineRow(
                 if (line.explanation.isNotBlank()) {
                     Text("💡 " + line.explanation, style = MaterialTheme.typography.bodyMedium)
                 }
-                if (line.slang.isNotEmpty()) SlangChips(line.slang)
-                LineActions(line, onAsk = onAsk, onSpeak = onSpeak, onRetry = onRetry)
+                if (line.slang.isNotEmpty()) SlangChips(line, actions)
+                LineActions(line, actions)
             }
         }
     }
@@ -244,14 +283,28 @@ private fun StatusBadge(line: LiveLine) {
 }
 
 @Composable
-fun SlangChips(slang: List<SlangTerm>) {
+fun SlangChips(line: LiveLine, actions: LineActionsHandler) {
     val colors = MaterialTheme.colorScheme
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        slang.forEach { term ->
-            Surface(shape = RoundedCornerShape(12.dp), color = colors.secondaryContainer.copy(alpha = 0.55f)) {
-                Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                    Text(term.term, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.secondary)
-                    Text(term.meaning, style = MaterialTheme.typography.bodySmall, color = colors.onSecondaryContainer)
+        line.slang.forEach { term ->
+            val saved = actions.isSaved(term.term)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = colors.secondaryContainer.copy(alpha = if (saved) 0.9f else 0.55f),
+                modifier = Modifier.clickable { actions.onToggleWord(term.term, term.meaning, line) },
+            ) {
+                Row(Modifier.padding(start = 10.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f, fill = false)) {
+                        Text(term.term, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = colors.secondary)
+                        Text(term.meaning, style = MaterialTheme.typography.bodySmall, color = colors.onSecondaryContainer)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        if (saved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                        contentDescription = stringResource(R.string.action_save_word),
+                        tint = colors.secondary,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
             }
         }
@@ -259,25 +312,31 @@ fun SlangChips(slang: List<SlangTerm>) {
 }
 
 @Composable
-private fun LineActions(line: LiveLine, onAsk: () -> Unit, onSpeak: () -> Unit, onRetry: () -> Unit) {
+private fun LineActions(line: LiveLine, actions: LineActionsHandler) {
     val clipboard = LocalClipboardManager.current
+    val lineSaved = actions.isSaved(line.original)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onAsk) {
+        TextButton(onClick = { actions.onAsk(line) }) {
             Icon(Icons.Filled.Forum, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.action_ask))
         }
-        TextButton(onClick = onSpeak) {
+        TextButton(onClick = { actions.onSpeak(line) }) {
             Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = stringResource(R.string.action_speak), modifier = Modifier.size(18.dp))
+        }
+        TextButton(onClick = { actions.onToggleLine(line) }) {
+            Icon(
+                if (lineSaved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                contentDescription = stringResource(R.string.action_save_line),
+                modifier = Modifier.size(18.dp),
+            )
         }
         TextButton(onClick = { clipboard.setText(AnnotatedString(copyText(line))) }) {
             Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.action_copy), modifier = Modifier.size(18.dp))
         }
         if (line.status == LineStatus.OFFLINE) {
-            TextButton(onClick = onRetry) {
-                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(R.string.action_retry))
+            TextButton(onClick = { actions.onRetry(line) }) {
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_retry), modifier = Modifier.size(18.dp))
             }
         }
     }

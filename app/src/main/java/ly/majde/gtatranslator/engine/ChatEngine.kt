@@ -26,6 +26,7 @@ class ChatEngine(
     private val router: AiRouter,
     private val settings: StateFlow<AppSettings>,
     private val lines: StateFlow<List<LiveLine>>,
+    private val story: StateFlow<StoryState>,
     private val scope: CoroutineScope,
     initial: List<ChatMessage>,
 ) {
@@ -59,7 +60,7 @@ class ChatEngine(
                     task = AiTask.CHAT,
                     system = { target ->
                         val budget = if (target.client.providerName == "Gemini") GEMINI_TRANSCRIPT_CHARS else SMALL_TRANSCRIPT_CHARS
-                        ChatPrompt.system(s.style, ChatPrompt.transcript(lines.value, budget))
+                        ChatPrompt.system(s.style, ChatPrompt.transcript(lines.value, budget), story.value.characters)
                     },
                     messages = { (history + user).map { it.toAiMessage() } },
                     options = LlmOptions(maxTokens = 1_200, webSearch = s.webSearch),

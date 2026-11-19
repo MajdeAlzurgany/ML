@@ -8,19 +8,22 @@ import java.util.Locale
 class Speaker(context: Context) : TextToSpeech.OnInitListener {
 
     @Volatile private var ready = false
-    @Volatile private var languageSet = false
+    @Volatile private var currentLanguage: String? = null
     private val tts = TextToSpeech(context.applicationContext, this)
 
     override fun onInit(status: Int) {
         ready = status == TextToSpeech.SUCCESS
     }
 
-    fun speak(text: String) {
+    /** Speaks Arabic by default; pass english = true for pronunciation of English words. */
+    fun speak(text: String, english: Boolean = false) {
         if (!ready || text.isBlank()) return
-        if (!languageSet) {
-            runCatching { tts.setLanguage(Locale.forLanguageTag("ar")) }
-            languageSet = true
+        val tag = if (english) "en-US" else "ar"
+        if (currentLanguage != tag) {
+            runCatching { tts.setLanguage(Locale.forLanguageTag(tag)) }
+            currentLanguage = tag
         }
+        tts.setSpeechRate(if (english) 0.9f else 1f)
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "line")
     }
 

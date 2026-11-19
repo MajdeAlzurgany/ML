@@ -4,7 +4,10 @@ enum class OutputStyle { LIBYAN, MSA }
 
 enum class DetailLevel { SHORT, DETAILED }
 
-enum class LiveMode { CAMERA, MIC }
+enum class LiveMode { CAMERA, MIC, BOTH;
+
+    val usesCamera: Boolean get() = this == CAMERA || this == BOTH
+}
 
 /** Region of the camera preview (normalized 0..1) where subtitles are read. */
 data class NormRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -53,6 +56,8 @@ data class AppSettings(
     val detail: DetailLevel = DetailLevel.SHORT,
     val micSensitivity: Float = 0.5f,
     val roi: NormRect = NormRect.DEFAULT,
+    /** False until the subtitle region was placed (automatically or by hand). */
+    val roiConfigured: Boolean = false,
     val liveMode: LiveMode = LiveMode.CAMERA,
     val textScale: Float = 1f,
     val showOriginal: Boolean = true,

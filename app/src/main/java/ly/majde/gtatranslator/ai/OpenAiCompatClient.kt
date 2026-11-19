@@ -27,6 +27,10 @@ class OpenAiCompatClient(
     private val http: OkHttpClient,
 ) : LlmClient {
 
+    /** Receives rate-limit headers (model, headers) for the quota meter. */
+    @Volatile
+    var headerListener: ((String, Headers) -> Unit)? = null
+
     /** Models that rejected our reasoning parameters. */
     private val noReasoningParams: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -45,6 +49,7 @@ class OpenAiCompatClient(
                     request = chatRequest(apiKey, model, system, messages, options, sendReasoning),
                     parseError = { c, b, h -> parseError(c, b, h) },
                     onData = { d -> parseDelta(d) },
+                    onHeaders = { h -> headerListener?.invoke(model, h) },
                 ).collect { emit(it) }
                 return@flow
             } catch (e: AiException) {
@@ -92,6 +97,7 @@ class OpenAiCompatClient(
                 .build()
             val (code, payload) = http.executeForText(request)
             val (text, headers) = payload
+            headerListener?.invoke(model, headers)
             if (code !in 200..299) throw parseError(code, text, headers)
             val root = JSONObject(text)
             val language = root.optString("language")

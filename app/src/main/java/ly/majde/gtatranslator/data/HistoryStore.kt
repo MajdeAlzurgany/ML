@@ -6,8 +6,11 @@ import ly.majde.gtatranslator.ai.Role
 import ly.majde.gtatranslator.engine.ChatMessage
 import ly.majde.gtatranslator.engine.LineStatus
 import ly.majde.gtatranslator.engine.LiveLine
+import ly.majde.gtatranslator.engine.SavedWord
 import ly.majde.gtatranslator.engine.SlangTerm
 import ly.majde.gtatranslator.engine.Source
+import ly.majde.gtatranslator.engine.StoryCharacter
+import ly.majde.gtatranslator.engine.StoryState
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -15,6 +18,100 @@ import org.json.JSONObject
 class HistoryStore(context: Context) {
 
     private val file = File(context.filesDir, "history.json")
+    private val storyFile = File(context.filesDir, "story.json")
+    private val wordsFile = File(context.filesDir, "words.json")
+
+    fun loadStory(): StoryState = try {
+        if (!storyFile.exists()) {
+            StoryState()
+        } else {
+            val o = JSONObject(storyFile.readText())
+            val arr = o.optJSONArray("characters")
+            val characters = if (arr == null) emptyList() else (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.let { c ->
+                    StoryCharacter(c.optString("name"), c.optString("role"), c.optString("relations"), c.optString("latest"))
+                }
+            }.filter { it.name.isNotBlank() }
+            StoryState(
+                characters = characters,
+                charactersLineCount = o.optInt("charactersLineCount"),
+                recap = o.optString("recap"),
+                recapLineCount = o.optInt("recapLineCount"),
+            )
+        }
+    } catch (e: Exception) {
+        StoryState()
+    }
+
+    @Synchronized
+    fun saveStory(state: StoryState) {
+        val o = JSONObject()
+            .put("characters", JSONArray().apply {
+                state.characters.forEach { c ->
+                    put(JSONObject().put("name", c.name).put("role", c.role).put("relations", c.relations).put("latest", c.latest))
+                }
+            })
+            .put("charactersLineCount", state.charactersLineCount)
+            .put("recap", state.recap)
+            .put("recapLineCount", state.recapLineCount)
+        writeAtomically(storyFile, o.toString())
+    }
+
+    fun loadWords(): List<SavedWord> = try {
+        if (!wordsFile.exists()) {
+            emptyList()
+        } else {
+            val arr = JSONArray(wordsFile.readText())
+            (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.let { w ->
+                    SavedWord(
+                        id = w.optLong("id"),
+                        term = w.optString("term"),
+                        meaning = w.optString("meaning"),
+                        example = w.optString("example"),
+                        exampleTranslation = w.optString("exampleTranslation"),
+                        box = w.optInt("box"),
+                        due = w.optLong("due"),
+                        added = w.optLong("added"),
+                        reviews = w.optInt("reviews"),
+                        correct = w.optInt("correct"),
+                    )
+                }
+            }.filter { it.term.isNotBlank() }
+        }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    @Synchronized
+    fun saveWords(words: List<SavedWord>) {
+        val arr = JSONArray()
+        words.forEach { w ->
+            arr.put(
+                JSONObject()
+                    .put("id", w.id)
+                    .put("term", w.term)
+                    .put("meaning", w.meaning)
+                    .put("example", w.example)
+                    .put("exampleTranslation", w.exampleTranslation)
+                    .put("box", w.box)
+                    .put("due", w.due)
+                    .put("added", w.added)
+                    .put("reviews", w.reviews)
+                    .put("correct", w.correct)
+            )
+        }
+        writeAtomically(wordsFile, arr.toString())
+    }
+
+    private fun writeAtomically(target: File, content: String) {
+        val tmp = File(target.parentFile, target.name + ".tmp")
+        tmp.writeText(content)
+        if (!tmp.renameTo(target)) {
+            target.writeText(content)
+            tmp.delete()
+        }
+    }
 
     fun load(): Pair<List<LiveLine>, List<ChatMessage>> = try {
         if (!file.exists()) {

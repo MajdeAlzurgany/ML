@@ -37,6 +37,7 @@ class SettingsRepository(context: Context) {
             putBoolean(K_SPEAK, new.speak)
             putBoolean(K_WEB_SEARCH, new.webSearch)
             putBoolean(K_ONBOARDING, new.onboardingDone)
+            putBoolean(K_ROI_CONFIGURED, new.roiConfigured)
             putFloat(K_ROI_L, new.roi.left)
             putFloat(K_ROI_T, new.roi.top)
             putFloat(K_ROI_R, new.roi.right)
@@ -71,6 +72,7 @@ class SettingsRepository(context: Context) {
             speak = prefs.getBoolean(K_SPEAK, d.speak),
             webSearch = prefs.getBoolean(K_WEB_SEARCH, d.webSearch),
             onboardingDone = prefs.getBoolean(K_ONBOARDING, false) || groqKey.isNotBlank() || geminiKey.isNotBlank(),
+            roiConfigured = prefs.getBoolean(K_ROI_CONFIGURED, prefs.contains(K_ROI_L)),
             roi = NormRect(
                 prefs.getFloat(K_ROI_L, d.roi.left),
                 prefs.getFloat(K_ROI_T, d.roi.top),
@@ -99,6 +101,7 @@ class SettingsRepository(context: Context) {
         const val K_SPEAK = "speak"
         const val K_WEB_SEARCH = "web_search"
         const val K_ONBOARDING = "onboarding_done"
+        const val K_ROI_CONFIGURED = "roi_configured"
         const val K_ROI_L = "roi_l"
         const val K_ROI_T = "roi_t"
         const val K_ROI_R = "roi_r"

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.Icon
@@ -35,11 +36,13 @@ import ly.majde.gtatranslator.ui.screens.HistoryScreen
 import ly.majde.gtatranslator.ui.screens.LiveScreen
 import ly.majde.gtatranslator.ui.screens.OnboardingScreen
 import ly.majde.gtatranslator.ui.screens.SettingsScreen
+import ly.majde.gtatranslator.ui.screens.WordsScreen
 import ly.majde.gtatranslator.ui.theme.NightBrush
 
 private enum class AppTab(@StringRes val label: Int, val icon: ImageVector) {
     LIVE(R.string.tab_live, Icons.Filled.Subtitles),
     CHAT(R.string.tab_chat, Icons.Filled.Forum),
+    WORDS(R.string.tab_words, Icons.Filled.School),
     HISTORY(R.string.tab_history, Icons.Filled.History),
     SETTINGS(R.string.tab_settings, Icons.Filled.Settings),
 }
@@ -68,7 +71,8 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
                         selected = tab == item,
                         onClick = { tab = item },
                         icon = { Icon(item.icon, contentDescription = null) },
-                        label = { Text(stringResource(item.label)) },
+                        label = { Text(stringResource(item.label), maxLines = 1) },
+                        alwaysShowLabel = false,
                         colors = NavigationBarItemDefaults.colors(
                             indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
                             selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -87,6 +91,7 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
             when (tab) {
                 AppTab.LIVE -> LiveScreen(vm)
                 AppTab.CHAT -> ChatScreen(vm)
+                AppTab.WORDS -> WordsScreen(vm)
                 AppTab.HISTORY -> HistoryScreen(vm)
                 AppTab.SETTINGS -> SettingsScreen(vm)
             }

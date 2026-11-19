@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 
 package ly.majde.gtatranslator.ui.screens
 
@@ -31,7 +31,18 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -60,6 +71,8 @@ import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.ai.Role
 import ly.majde.gtatranslator.engine.ChatMessage
 import ly.majde.gtatranslator.engine.LiveLine
+import ly.majde.gtatranslator.engine.StoryState
+import ly.majde.gtatranslator.ui.components.GlowCard
 import ly.majde.gtatranslator.ui.MainViewModel
 import ly.majde.gtatranslator.ui.components.GradientIcon
 import ly.majde.gtatranslator.ui.components.MarkdownText
@@ -74,8 +87,10 @@ fun ChatScreen(vm: MainViewModel) {
     val askRequest by vm.askRequest.collectAsStateWithLifecycle()
     val lines by vm.lines.collectAsStateWithLifecycle()
 
+    val story by vm.storyState.collectAsStateWithLifecycle()
     var input by rememberSaveable { mutableStateOf("") }
     var quote by remember { mutableStateOf<LiveLine?>(null) }
+    var sheet by rememberSaveable { mutableStateOf(StorySheet.NONE) }
     val explainLine = stringResource(R.string.chat_explain_line)
 
     LaunchedEffect(askRequest) {
@@ -114,6 +129,27 @@ fun ChatScreen(vm: MainViewModel) {
                 IconButton(onClick = vm::clearChat) {
                     Icon(Icons.Filled.DeleteSweep, contentDescription = stringResource(R.string.clear))
                 }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            FilledTonalButton(onClick = {
+                sheet = StorySheet.CHARACTERS
+                vm.refreshCharacters()
+            }) {
+                Icon(Icons.Filled.Groups, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.story_characters))
+            }
+            FilledTonalButton(onClick = {
+                sheet = StorySheet.RECAP
+                vm.refreshRecap()
+            }) {
+                Icon(Icons.Filled.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.story_recap))
             }
         }
 
@@ -196,6 +232,68 @@ fun ChatScreen(vm: MainViewModel) {
                     modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send)) }
             }
+        }
+    }
+    StorySheetHost(sheet, story, lines.size, vm) { sheet = StorySheet.NONE }
+}
+
+private enum class StorySheet { NONE, CHARACTERS, RECAP }
+
+@Composable
+private fun StorySheetHost(sheet: StorySheet, story: StoryState, lineCount: Int, vm: MainViewModel, onClose: () -> Unit) {
+    if (sheet == StorySheet.NONE) return
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onClose, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(if (sheet == StorySheet.CHARACTERS) R.string.story_characters else R.string.recap_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = {
+                    if (sheet == StorySheet.CHARACTERS) vm.refreshCharacters(force = true) else vm.refreshRecap(force = true)
+                }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.story_refresh))
+                }
+            }
+            val loading = if (sheet == StorySheet.CHARACTERS) story.loadingCharacters else story.loadingRecap
+            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            story.error?.let { Text(noticeText(it, null), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            if (lineCount < 4) {
+                Text(
+                    stringResource(R.string.story_need_more),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (sheet == StorySheet.CHARACTERS) {
+                story.characters.forEach { c ->
+                    GlowCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(c.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                            if (c.role.isNotBlank()) Text(c.role, style = MaterialTheme.typography.bodyMedium)
+                            if (c.relations.isNotBlank()) {
+                                Text("🔗 " + c.relations, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (c.latest.isNotBlank()) {
+                                Text("🕒 " + c.latest, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            } else if (story.recap.isNotBlank()) {
+                MarkdownText(story.recap, style = MaterialTheme.typography.bodyLarge)
+            }
+            Spacer(Modifier.size(24.dp))
         }
     }
 }

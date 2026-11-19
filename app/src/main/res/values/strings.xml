@@ -4,7 +4,8 @@
 
     <!-- Tabs -->
     <string name="tab_live">مباشر</string>
-    <string name="tab_chat">اسأل</string>
+    <string name="tab_chat">القصة</string>
+    <string name="tab_words">كلماتي</string>
     <string name="tab_history">السجل</string>
     <string name="tab_settings">الإعدادات</string>
 
@@ -70,7 +71,7 @@
     <string name="notice_bad_request">صار خطأ في الطلب: %1$s</string>
 
     <!-- Chat -->
-    <string name="chat_title">اسأل عن القصة</string>
+    <string name="chat_title">القصة</string>
     <string name="chat_subtitle">يعرف كل الحوار اللي شفته (%1$d جملة)</string>
     <string name="chat_hint">اسأل على أي حاجة في القصة أو الحوار…</string>
     <string name="chat_send">إرسال</string>
@@ -152,4 +153,63 @@
     <string name="onb_ready_title">جاهز للعب!</string>
     <string name="onb_ready_body">فعّل الـ subtitles في اللعبة وخليها كبيرة، وثبّت الموبايل قدام الشاشة. وأي حاجة مش فاهمها اسأل عليها من تبويب \"اسأل\".</string>
     <string name="onb_no_key_warning">ما زدتش مفتاح: التطبيق يترجم بترجمة الجهاز بس، ومن غير شرح ولا صوت. تقدر تزيده بعدين من الإعدادات.</string>
+    <!-- v3: modes & auto-detect -->
+    <string name="mode_both">الاثنين</string>
+    <string name="empty_both">الكاميرا تقرا الـ subtitles والمايك يلقط الكلام اللي ما عندهش subtitle، والتكرار يتحذف بروحه.\nثبّت الموبايل قدام الشاشة وقريب من السماعة.</string>
+    <string name="scan_button">تحديد مكان الـ subtitles أوتوماتيك</string>
+    <string name="scan_running">قاعد يدوّر على مكان الـ subtitles…</string>
+    <string name="scan_found">لقيت مكان الـ subtitles ✅</string>
+    <string name="scan_not_found">ما لقيتش كلام. خلي subtitle يظهر في الشاشة وعاود</string>
+    <string name="offline_downloading_short">يحمّل الترجمة الفورية…</string>
+
+    <!-- v3: updates -->
+    <string name="update_available">نسخة جديدة متاحة (%1$s)</string>
+    <string name="update_now">حدّث توا</string>
+    <string name="update_now_version">حدّث للنسخة %1$s</string>
+    <string name="update_install">ثبّت التحديث</string>
+    <string name="update_retry">عاود التحميل</string>
+    <string name="update_browser">نزّلها من المتصفح</string>
+    <string name="section_updates">التحديثات</string>
+    <string name="update_current">نسختك: %1$s</string>
+    <string name="update_checking">قاعد يدوّر على تحديث…</string>
+    <string name="update_up_to_date">عندك آخر نسخة ✅</string>
+    <string name="update_failed">ما قدرتش نتأكد من التحديثات. جرّب بعدين.</string>
+    <string name="update_check">تحقق من التحديثات</string>
+
+    <!-- v3: story -->
+    <string name="recap_title">شن صار المرة اللي فاتت</string>
+    <string name="story_characters">الشخصيات</string>
+    <string name="story_recap">الملخص</string>
+    <string name="story_refresh">تحديث</string>
+    <string name="story_need_more">ترجم شوية حوار أول (٤ جمل على الأقل) باش نقدر نبني الشخصيات والملخص.</string>
+
+    <!-- v3: words -->
+    <string name="action_save_word">احفظ الكلمة</string>
+    <string name="action_save_line">احفظ الجملة</string>
+    <string name="word_saved">تحفظت في كلماتي 📚</string>
+    <string name="word_removed">تشالت من كلماتي</string>
+    <string name="words_title">كلماتي</string>
+    <string name="words_subtitle">%1$d كلمة محفوظة · %2$d جاهزة للمراجعة</string>
+    <string name="words_empty_title">تعلّم إنجليزي وأنت تلعب</string>
+    <string name="words_empty_body">دوس على أي كلمة slang في الترجمة، أو على علامة الحفظ في أي جملة، وتتحفظ هني. بعدها راجعها بالكروت أو جرّب الاختبار.</string>
+    <string name="words_review">راجع (%1$d)</string>
+    <string name="words_quiz">اختبار سريع</string>
+    <string name="words_level">مستوى %1$d</string>
+    <string name="words_score">%1$d/%2$d صح</string>
+    <string name="words_review_title">مراجعة</string>
+    <string name="words_tap_to_flip">دوس على الكرت باش تشوف المعنى</string>
+    <string name="words_knew">عرفتها ✅</string>
+    <string name="words_didnt_know">ما عرفتهاش</string>
+    <string name="words_review_done">خلصت المراجعة! عرفت %1$d من %2$d 🎉</string>
+    <string name="words_quiz_question">شن معنى الكلمة هذي؟</string>
+    <string name="words_quiz_done">نتيجتك %1$d من %2$d 🏆</string>
+
+    <!-- v3: quota -->
+    <string name="section_quota">الحصة المجانية</string>
+    <string name="quota_empty">لما تبدا تترجم، تبان هني الحصة الباقية لكل نموذج.</string>
+    <string name="quota_active">شغال توا</string>
+    <string name="quota_resting">مرتاح %1$d د</string>
+    <string name="quota_remaining">باقي %1$d من %2$d طلب اليوم · استعملت %3$d</string>
+    <string name="quota_used">استعملت %1$d طلب اليوم</string>
+    <string name="quota_help">لما نموذج يخلص حصته، التطبيق يبدّل للي بعده أوتوماتيك، وترجمة الجهاز تقعد شغالة دايماً.</string>
 </resources>

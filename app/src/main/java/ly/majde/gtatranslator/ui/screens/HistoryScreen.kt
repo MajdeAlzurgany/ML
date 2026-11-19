@@ -38,6 +38,7 @@ import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.ui.MainViewModel
 import ly.majde.gtatranslator.ui.components.CompactLineRow
 import ly.majde.gtatranslator.ui.components.GradientIcon
+import ly.majde.gtatranslator.ui.components.rememberLineActions
 
 @Composable
 fun HistoryScreen(vm: MainViewModel) {
@@ -45,6 +46,7 @@ fun HistoryScreen(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
+    val actions = rememberLineActions(vm)
 
     val filtered = remember(lines, query) {
         val q = query.trim()
@@ -108,13 +110,7 @@ fun HistoryScreen(vm: MainViewModel) {
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(filtered, key = { it.id }) { line ->
-                    CompactLineRow(
-                        line = line,
-                        showOriginal = settings.showOriginal,
-                        onAsk = { vm.ask(line) },
-                        onSpeak = { vm.speak(line) },
-                        onRetry = { vm.retryLine(line.id) },
-                    )
+                    CompactLineRow(line = line, showOriginal = settings.showOriginal, actions = actions)
                 }
             }
         }

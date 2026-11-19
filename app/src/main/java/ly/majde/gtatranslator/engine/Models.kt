@@ -66,3 +66,38 @@ fun AiException.toNotice(): Notice = when (kind) {
     AiException.Kind.BAD_REQUEST -> Notice.BAD_REQUEST
     AiException.Kind.PARSE -> Notice.SERVER
 }
+
+/** A character in the story, built from the dialogue the player has seen. */
+data class StoryCharacter(
+    val name: String,
+    val role: String,
+    val relations: String,
+    val latest: String,
+)
+
+data class StoryState(
+    val characters: List<StoryCharacter> = emptyList(),
+    /** Number of translated lines the character list was built from. */
+    val charactersLineCount: Int = 0,
+    val recap: String = "",
+    val recapLineCount: Int = 0,
+    val loadingCharacters: Boolean = false,
+    val loadingRecap: Boolean = false,
+    val error: Notice? = null,
+    /** True when a "previously on" recap should be shown on the live screen. */
+    val showRecapCard: Boolean = false,
+)
+
+/** A word or phrase the player saved to learn. Reviewed with a Leitner schedule. */
+data class SavedWord(
+    val id: Long,
+    val term: String,
+    val meaning: String,
+    val example: String = "",
+    val exampleTranslation: String = "",
+    val box: Int = 0,
+    val due: Long = 0L,
+    val added: Long = System.currentTimeMillis(),
+    val reviews: Int = 0,
+    val correct: Int = 0,
+)

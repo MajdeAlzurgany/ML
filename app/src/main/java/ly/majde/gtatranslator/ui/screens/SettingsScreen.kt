@@ -39,7 +39,13 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.os.SystemClock
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import kotlinx.coroutines.delay
+import ly.majde.gtatranslator.update.UpdateState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -116,6 +122,10 @@ fun SettingsScreen(vm: MainViewModel) {
                 onSave = { vm.saveAndCheckKey(Provider.GEMINI, it) },
             )
         }
+
+        QuotaSection(vm)
+
+        UpdatesSection(vm)
 
         Section(stringResource(R.string.section_models)) {
             ModelPicker(
@@ -354,5 +364,106 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun QuotaSection(vm: MainViewModel) {
+    val quotas by vm.quotas.collectAsStateWithLifecycle()
+    val active by vm.activeModel.collectAsStateWithLifecycle()
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            now = SystemClock.elapsedRealtime()
+        }
+    }
+    Section(stringResource(R.string.section_quota)) {
+        if (quotas.isEmpty()) {
+            Text(
+                stringResource(R.string.quota_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        quotas.values.sortedWith(compareBy({ it.provider }, { -it.usedToday })).forEach { q ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${q.provider} · ${q.model.substringAfterLast('/')}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    when {
+                        q.cooldownUntil > now -> Pill(
+                            stringResource(R.string.quota_resting, ((q.cooldownUntil - now) / 60_000L + 1).toInt()),
+                            contentColor = MaterialTheme.colorScheme.tertiary,
+                        )
+                        active == q.id -> Pill(stringResource(R.string.quota_active), contentColor = MaterialTheme.colorScheme.secondary)
+                        else -> Unit
+                    }
+                }
+                val remaining = q.remaining
+                val limit = q.limit
+                if (remaining != null && limit != null && limit > 0) {
+                    LinearProgressIndicator(
+                        progress = { remaining.toFloat() / limit },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        stringResource(R.string.quota_remaining, remaining, limit, q.usedToday),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        stringResource(R.string.quota_used, q.usedToday),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        Text(
+            stringResource(R.string.quota_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+    }
+}
+
+@Composable
+private fun UpdatesSection(vm: MainViewModel) {
+    val state by vm.updateState.collectAsStateWithLifecycle()
+    Section(stringResource(R.string.section_updates)) {
+        Text(
+            stringResource(R.string.update_current, BuildConfig.VERSION_NAME),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        when (val s = state) {
+            UpdateState.Checking -> Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.update_checking), style = MaterialTheme.typography.bodySmall)
+            }
+            UpdateState.UpToDate -> Text(
+                stringResource(R.string.update_up_to_date),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            is UpdateState.Available -> Button(onClick = { vm.installUpdate(s.release) }) {
+                Text(stringResource(R.string.update_now_version, s.release.versionName))
+            }
+            is UpdateState.Downloading -> LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
+            is UpdateState.ReadyToInstall -> Button(onClick = vm::retryInstall) { Text(stringResource(R.string.update_install)) }
+            is UpdateState.Failed -> Text(
+                stringResource(R.string.update_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            UpdateState.Idle -> Unit
+        }
+        OutlinedButton(onClick = vm::checkForUpdates) { Text(stringResource(R.string.update_check)) }
     }
 }
