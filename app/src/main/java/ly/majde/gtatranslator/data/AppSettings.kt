@@ -4,6 +4,16 @@ enum class OutputStyle { LIBYAN, MSA }
 
 enum class DetailLevel { SHORT, DETAILED }
 
+/** How the main translation appears while it is being produced. */
+enum class DisplayMode {
+    /** One complete, final sentence that never changes once shown (default). */
+    STABLE,
+    /** The AI translation fills in word by word, without anything moving. */
+    WORDS,
+    /** Show immediately and keep improving (fastest, but changes on screen). */
+    INSTANT,
+}
+
 enum class LiveMode { CAMERA, MIC, BOTH;
 
     val usesCamera: Boolean get() = this == CAMERA || this == BOTH
@@ -60,6 +70,12 @@ data class AppSettings(
     val roiConfigured: Boolean = false,
     val liveMode: LiveMode = LiveMode.CAMERA,
     val textScale: Float = 1f,
+    val displayMode: DisplayMode = DisplayMode.STABLE,
+    /** Text size multiplier for the full-screen reading mode. */
+    val readingScale: Float = 1f,
+    /** 0 = white, 1 = subtitle yellow, 2 = teal. */
+    val readingColor: Int = 0,
+    val readingShowPrevious: Boolean = true,
     val showOriginal: Boolean = true,
     val speak: Boolean = false,
     val webSearch: Boolean = true,

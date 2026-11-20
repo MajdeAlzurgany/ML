@@ -67,6 +67,7 @@ import ly.majde.gtatranslator.BuildConfig
 import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.data.AppSettings
 import ly.majde.gtatranslator.data.DetailLevel
+import ly.majde.gtatranslator.data.DisplayMode
 import ly.majde.gtatranslator.data.OutputStyle
 import ly.majde.gtatranslator.translate.OfflineTranslator
 import ly.majde.gtatranslator.ui.KeyCheck
@@ -194,6 +195,30 @@ fun SettingsScreen(vm: MainViewModel) {
             }
             RadioRow(stringResource(R.string.detail_detailed), settings.detail == DetailLevel.DETAILED) {
                 vm.updateSettings { it.copy(detail = DetailLevel.DETAILED) }
+            }
+        }
+
+        Section(stringResource(R.string.section_reading)) {
+            Text(
+                stringResource(R.string.display_mode_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            RadioRow(stringResource(R.string.display_stable), settings.displayMode == DisplayMode.STABLE) {
+                vm.updateSettings { it.copy(displayMode = DisplayMode.STABLE) }
+            }
+            RadioRow(stringResource(R.string.display_words), settings.displayMode == DisplayMode.WORDS) {
+                vm.updateSettings { it.copy(displayMode = DisplayMode.WORDS) }
+            }
+            RadioRow(stringResource(R.string.display_instant), settings.displayMode == DisplayMode.INSTANT) {
+                vm.updateSettings { it.copy(displayMode = DisplayMode.INSTANT) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            SwitchRow(stringResource(R.string.reading_show_previous), settings.readingShowPrevious) { v ->
+                vm.updateSettings { it.copy(readingShowPrevious = v) }
+            }
+            Button(onClick = vm::enterReading, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.reading_open))
             }
         }
 

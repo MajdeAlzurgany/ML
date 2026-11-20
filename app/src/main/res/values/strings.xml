@@ -212,4 +212,22 @@
     <string name="quota_remaining">باقي %1$d من %2$d طلب اليوم · استعملت %3$d</string>
     <string name="quota_used">استعملت %1$d طلب اليوم</string>
     <string name="quota_help">لما نموذج يخلص حصته، التطبيق يبدّل للي بعده أوتوماتيك، وترجمة الجهاز تقعد شغالة دايماً.</string>
+    <!-- v4: reading experience -->
+    <string name="section_reading">تجربة القراءة</string>
+    <string name="display_mode_help">كيف تطلع الترجمة الكبيرة وأنت تقرا:</string>
+    <string name="display_stable">جملة كاملة ثابتة (مستحسن): تطلع مرة وحدة كاملة وما تتغيرش</string>
+    <string name="display_words">كلمة بكلمة: الكلمات تطلع ورا بعض في مكانها بدون ما شي يتحرك</string>
+    <string name="display_instant">فورية: تطلع بسرعة وتتحسن قدامك (تتغير)</string>
+    <string name="reading_show_previous">بيّن الجملة اللي قبلها صغيرة فوق</string>
+    <string name="reading_open">وضع القراءة بكامل الشاشة</string>
+    <string name="reading_close">خروج</string>
+    <string name="reading_hold">ثبّت الجملة</string>
+    <string name="reading_details">الشرح</string>
+    <string name="reading_smaller">صغّر الخط</string>
+    <string name="reading_bigger">كبّر الخط</string>
+    <string name="reading_color">لون الخط</string>
+    <string name="reading_waiting">أول ما يطلع subtitle في اللعبة، الترجمة تطلع هني كبيرة.</string>
+    <string name="reading_frozen">الجملة مثبتة · اضغط مطوّل باش تكمل</string>
+    <string name="reading_frozen_short">مثبتة</string>
+    <string name="reading_gestures">لمسة: الأزرار · لمستين: الشرح · ضغط مطوّل: ثبّت الجملة · قرصة: حجم الخط</string>
 </resources>

@@ -2,17 +2,9 @@
 
 package ly.majde.gtatranslator.ui.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,11 +30,14 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,6 +68,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import ly.majde.gtatranslator.R
+import ly.majde.gtatranslator.data.DisplayMode
 import ly.majde.gtatranslator.engine.LineStatus
 import ly.majde.gtatranslator.engine.LiveLine
 import ly.majde.gtatranslator.engine.Source
@@ -86,24 +82,29 @@ fun sourceIcon(source: Source): ImageVector = when (source) {
     Source.MANUAL -> Icons.Filled.Keyboard
 }
 
-/** The big "now playing" card: newest line, large Arabic text readable from the couch. */
+/** The big "now playing" card: the line on screen, large Arabic text readable from the couch. */
 @Composable
 fun HeroLineCard(
     line: LiveLine,
     textScale: Float,
     showOriginal: Boolean,
+    displayMode: DisplayMode,
     actions: LineActionsHandler,
+    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    dimmed: Boolean = false,
+    frozen: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
+    val alpha by animateFloatAsState(targetValue = if (dimmed) 0.6f else 1f, animationSpec = tween(400), label = "dim")
     GlowCard(modifier = modifier.fillMaxWidth(), glow = true, color = colors.surfaceContainerHigh) {
         Column(
             modifier = Modifier
                 .padding(18.dp)
-                .animateContentSize(),
+                .alpha(alpha),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            LineHeader(line)
+            LineHeader(line, frozen = frozen, onExpand = onExpand)
             if (showOriginal && line.original.isNotBlank()) {
                 Text(
                     line.original,
@@ -114,26 +115,30 @@ fun HeroLineCard(
                 )
             }
             val headline = MaterialTheme.typography.headlineSmall
-            AnimatedContent(
-                targetState = line.bestTranslation,
-                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) },
-                label = "translation",
-            ) { text ->
-                Text(
-                    text.ifBlank { "…" },
-                    style = headline.copy(fontSize = headline.fontSize * textScale, lineHeight = headline.lineHeight * textScale),
+            DisplayTranslation(
+                line = line,
+                mode = displayMode,
+                style = headline.copy(
+                    fontSize = headline.fontSize * textScale,
+                    lineHeight = headline.lineHeight * textScale,
                     fontWeight = FontWeight.ExtraBold,
-                    color = colors.onSurface,
-                )
-            }
-            AnimatedVisibility(visible = line.explanation.isNotBlank()) {
+                ),
+                color = colors.onSurface,
+                minLines = 2,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onExpand),
+            )
+            // Details appear once, when the line is final, so nothing below keeps jumping.
+            val ready = displayMode == DisplayMode.INSTANT || line.status == LineStatus.DONE
+            if (ready && line.explanation.isNotBlank()) {
                 Text(
                     "💡 " + line.explanation,
                     style = MaterialTheme.typography.bodyLarge.let { it.copy(fontSize = it.fontSize * textScale.coerceAtMost(1.3f)) },
                     color = colors.onSurface.copy(alpha = 0.9f),
                 )
             }
-            if (line.slang.isNotEmpty()) SlangChips(line, actions)
+            if (ready && line.slang.isNotEmpty()) SlangChips(line, actions)
             LineActions(line, actions)
         }
     }
@@ -210,7 +215,7 @@ fun CompactLineRow(
                 Text(timeFormat.format(Date(line.timestamp)), style = MaterialTheme.typography.labelSmall, color = colors.outline)
             }
             Text(
-                line.bestTranslation.ifBlank { "…" },
+                line.shown.ifBlank { line.bestTranslation }.ifBlank { "···" },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 maxLines = if (expanded) Int.MAX_VALUE else 2,
@@ -239,42 +244,31 @@ fun CompactLineRow(
 }
 
 @Composable
-private fun LineHeader(line: LiveLine) {
+private fun LineHeader(line: LiveLine, frozen: Boolean, onExpand: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Icon(sourceIcon(line.source), contentDescription = null, tint = colors.secondary, modifier = Modifier.size(18.dp))
         if (line.speaker.isNotBlank()) {
             Pill(line.speaker, color = colors.tertiary.copy(alpha = 0.18f), contentColor = colors.tertiary)
         }
+        if (frozen) Pill(stringResource(R.string.reading_frozen_short), icon = Icons.Filled.PushPin, contentColor = colors.primary)
         Spacer(Modifier.weight(1f))
         StatusBadge(line)
+        IconButton(onClick = onExpand, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Filled.Fullscreen, contentDescription = stringResource(R.string.reading_open), tint = colors.onSurfaceVariant)
+        }
     }
 }
 
+/** Static (non-blinking) status, so nothing on the card distracts while reading. */
 @Composable
 private fun StatusBadge(line: LiveLine) {
     val colors = MaterialTheme.colorScheme
     when (line.status) {
-        LineStatus.DRAFT, LineStatus.REFINING -> {
-            val pulse = rememberInfiniteTransition(label = "pulse")
-            val a by pulse.animateFloat(
-                initialValue = 0.35f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
-                label = "alpha",
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(
-                    Modifier
-                        .size(7.dp)
-                        .alpha(a)
-                        .background(colors.secondary, CircleShape)
-                )
-                Pill(stringResource(R.string.status_instant), icon = Icons.Filled.Bolt, contentColor = colors.secondary)
-            }
-        }
+        LineStatus.DRAFT, LineStatus.REFINING ->
+            Pill(stringResource(R.string.status_instant), icon = Icons.Filled.Bolt, contentColor = colors.secondary)
         LineStatus.DONE -> Pill(
-            line.provider.ifBlank { stringResource(R.string.status_ai) },
+            line.provider.substringAfter("· ").ifBlank { stringResource(R.string.status_ai) },
             icon = Icons.Filled.AutoAwesome,
             contentColor = colors.primary,
         )

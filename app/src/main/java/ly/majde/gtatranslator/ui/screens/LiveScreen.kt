@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloseFullscreen
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.Mic
@@ -44,6 +45,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -87,6 +89,7 @@ import ly.majde.gtatranslator.R
 import ly.majde.gtatranslator.data.AppSettings
 import ly.majde.gtatranslator.data.LiveMode
 import ly.majde.gtatranslator.engine.LiveLine
+import ly.majde.gtatranslator.engine.Source
 import ly.majde.gtatranslator.translate.OfflineTranslator
 import ly.majde.gtatranslator.ui.MainViewModel
 import ly.majde.gtatranslator.ui.ScanState
@@ -117,7 +120,14 @@ fun LiveScreen(vm: MainViewModel) {
     val activeModel by vm.activeModel.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize()) {
-        LiveHeader(settings.liveMode, busy = status.busy > 0, offlineState = offlineState, activeModel = activeModel, onMode = vm::setLiveMode)
+        LiveHeader(
+            settings.liveMode,
+            busy = status.busy > 0,
+            offlineState = offlineState,
+            activeModel = activeModel,
+            onMode = vm::setLiveMode,
+            onReading = vm::enterReading,
+        )
         UpdateBanner(update, vm)
         NoticeBar(status.notice, status.detail, onDismiss = vm::dismissNotice)
         BoxWithConstraints(
@@ -149,6 +159,7 @@ private fun LiveHeader(
     offlineState: OfflineTranslator.State,
     activeModel: String?,
     onMode: (LiveMode) -> Unit,
+    onReading: () -> Unit,
 ) {
     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,6 +171,9 @@ private fun LiveHeader(
                 OfflineTranslator.State.DOWNLOADING -> Pill(stringResource(R.string.offline_downloading_short))
                 OfflineTranslator.State.FAILED -> Pill(stringResource(R.string.offline_failed_short), contentColor = MaterialTheme.colorScheme.error)
                 else -> if (activeModel != null) Pill(activeModel.substringAfterLast('/').substringAfter(':'))
+            }
+            FilledTonalIconButton(onClick = onReading) {
+                Icon(Icons.Filled.Fullscreen, contentDescription = stringResource(R.string.reading_open))
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -503,10 +517,16 @@ private fun MicSource(vm: MainViewModel, settings: AppSettings, modifier: Modifi
 @Composable
 private fun Feed(vm: MainViewModel, settings: AppSettings, lines: List<LiveLine>, modifier: Modifier) {
     val story by vm.storyState.collectAsStateWithLifecycle()
+    val hero by vm.hero.collectAsStateWithLifecycle()
+    val onScreen by vm.subtitleOnScreen.collectAsStateWithLifecycle()
     val actions = rememberLineActions(vm)
     val listState = rememberLazyListState()
-    val newest = lines.firstOrNull()
-    LaunchedEffect(newest?.id) { if (newest != null) listState.animateScrollToItem(0) }
+    val heroLine = hero.line
+    // Follow new lines only if the reader is at the top (never yank them away from history).
+    LaunchedEffect(heroLine?.id) {
+        if (heroLine != null && listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
+    }
+    val others = remember(lines, heroLine?.id) { lines.filter { it.id != heroLine?.id }.take(RECENT_IN_FEED) }
 
     LazyColumn(
         modifier = modifier,
@@ -517,18 +537,22 @@ private fun Feed(vm: MainViewModel, settings: AppSettings, lines: List<LiveLine>
         if (story.showRecapCard) {
             item(key = "recap") { RecapCard(story.recap, story.loadingRecap, onDismiss = vm::dismissRecapCard) }
         }
-        if (newest == null) {
+        if (heroLine == null) {
             item(key = "empty") { EmptyFeed(settings) }
         } else {
-            item(key = "hero-${newest.id}") {
+            item(key = "hero") {
                 HeroLineCard(
-                    line = newest,
+                    line = heroLine,
                     textScale = settings.textScale,
                     showOriginal = settings.showOriginal,
+                    displayMode = settings.displayMode,
                     actions = actions,
+                    onExpand = vm::enterReading,
+                    dimmed = settings.liveMode != LiveMode.MIC && heroLine.source == Source.CAMERA && !onScreen && !hero.frozen,
+                    frozen = hero.frozen,
                 )
             }
-            items(lines.drop(1).take(RECENT_IN_FEED), key = { it.id }) { line ->
+            items(others, key = { it.id }) { line ->
                 CompactLineRow(line = line, showOriginal = settings.showOriginal, actions = actions)
             }
         }

@@ -3,6 +3,7 @@ package ly.majde.gtatranslator.engine
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -26,11 +27,12 @@ import ly.majde.gtatranslator.translate.OfflineTranslator
 import ly.majde.gtatranslator.util.TextSimilarity
 
 /**
- * Two-stage live pipeline:
- *  1. the line appears instantly with an on-device translation (ML Kit, offline);
- *  2. an AI model streams a natural translation + explanation that replaces it.
- * Live input that falls behind is never queued forever: stale lines keep their
- * instant translation so the feed always stays in sync with the game.
+ * Live pipeline with a calm, readable output:
+ *  1. the line is created instantly and translated on the device (ML Kit, offline);
+ *  2. an AI model streams a natural translation + explanation;
+ *  3. [LiveLine.shown] is set exactly once: the AI translation as soon as it is complete,
+ *     or the instant translation if the AI is slow or unavailable. It never changes after,
+ *     so the reader is never disturbed by text that keeps rewriting itself.
  */
 class LiveEngine(
     private val router: AiRouter,
@@ -39,14 +41,16 @@ class LiveEngine(
     private val scope: CoroutineScope,
     initial: List<LiveLine>,
 ) {
-    private val _lines = MutableStateFlow(initial)
+    private val _lines = MutableStateFlow(
+        initial.map { it.copy(shown = it.shown.ifBlank { it.bestTranslation }, arComplete = true) }
+    )
     val lines: StateFlow<List<LiveLine>> = _lines.asStateFlow()
 
     private val _status = MutableStateFlow(EngineStatus())
     val status: StateFlow<EngineStatus> = _status.asStateFlow()
 
     private val _completed = MutableSharedFlow<LiveLine>(extraBufferCapacity = 8)
-    /** Emits each line once its AI translation is complete (used for read-aloud). */
+    /** Emits each line once its translation is final (used for read-aloud). */
     val completed: SharedFlow<LiveLine> = _completed.asSharedFlow()
 
     private val ids = AtomicLong(initial.maxOfOrNull { it.id } ?: 0L)
@@ -59,12 +63,40 @@ class LiveEngine(
         if (source.isLive && isRecentDuplicate(clean, source)) return
         val line = LiveLine(id = ids.incrementAndGet(), source = source, original = clean)
         _lines.update { (listOf(line) + it).take(MAX_LINES) }
+        startPipeline(line.id, clean, source, rev = 0)
+    }
 
-        scope.launch {
-            val draft = offline.translate(clean) ?: return@launch
-            update(line.id) { if (it.translation.isBlank()) it.copy(draft = draft) else it }
+    /**
+     * The camera first read only part of a subtitle (e.g. one of two lines) and now sees all of it:
+     * update that line in place instead of adding a near-duplicate.
+     */
+    fun amend(text: String) {
+        val clean = text.replace(Regex("\\s+"), " ").trim()
+        if (clean.length < 2) return
+        val now = System.currentTimeMillis()
+        val target = _lines.value.firstOrNull { it.source == Source.CAMERA && now - it.timestamp < AMEND_WINDOW_MS }
+        if (target == null) {
+            submitText(clean, Source.CAMERA)
+            return
         }
-        scope.launch { refine(line.id, clean, source) }
+        val newRev = target.rev + 1
+        _lines.update { list ->
+            list.map {
+                if (it.id != target.id) it else it.copy(
+                    original = clean,
+                    draft = "",
+                    translation = "",
+                    explanation = "",
+                    slang = emptyList(),
+                    shown = "",
+                    arComplete = false,
+                    status = LineStatus.DRAFT,
+                    provider = "",
+                    rev = newRev,
+                )
+            }
+        }
+        startPipeline(target.id, clean, Source.CAMERA, newRev)
     }
 
     fun submitImage(jpeg: ByteArray) {
@@ -106,6 +138,8 @@ class LiveEngine(
                             slang = item.slang,
                             status = LineStatus.DONE,
                             provider = provider,
+                            shown = item.translation,
+                            arComplete = true,
                         )
                     }
                     _lines.update { (created.asReversed() + it).take(MAX_LINES) }
@@ -145,36 +179,53 @@ class LiveEngine(
         }
     }
 
-    /** Re-runs the AI translation for one line (e.g. after adding a key). */
+    /** Asks the AI again for one line; the user asked for it, so the shown text may change. */
     fun retry(id: Long) {
         val line = _lines.value.firstOrNull { it.id == id } ?: return
-        scope.launch { refine(line.id, line.original, Source.MANUAL) }
+        val newRev = line.rev + 1
+        _lines.update { list -> list.map { if (it.id == id) it.copy(shown = "", arComplete = false, rev = newRev) else it } }
+        scope.launch { refine(id, line.original, Source.MANUAL, newRev) }
     }
 
     fun clear() {
         _lines.value = emptyList()
     }
 
-    /** The live line is the newest one; used by the "save phrase" action. */
-    fun find(id: Long): LiveLine? = _lines.value.firstOrNull { it.id == id }
-
     fun dismissNotice() = clearNotice()
 
     // ---------------------------------------------------------------------------------
 
-    private suspend fun refine(lineId: Long, text: String, source: Source) {
+    private fun startPipeline(lineId: Long, text: String, source: Source, rev: Int) {
+        scope.launch {
+            val draft = offline.translate(text) ?: return@launch
+            update(lineId, rev) { it.copy(draft = draft) }
+            if (!router.hasProvider) {
+                update(lineId, rev) { it.copy(shown = it.shown.ifBlank { draft }, status = LineStatus.OFFLINE) }
+                return@launch
+            }
+            // If the AI has not finished the sentence by now, show the instant one (and keep it).
+            delay(STABLE_FALLBACK_MS)
+            update(lineId, rev) { line ->
+                if (line.shown.isBlank() && !line.arComplete && line.draft.isNotBlank()) line.copy(shown = line.draft) else line
+            }
+        }
+        scope.launch { refine(lineId, text, source, rev) }
+    }
+
+    private suspend fun refine(lineId: Long, text: String, source: Source, rev: Int) {
         if (!router.hasProvider) {
-            update(lineId) { it.copy(status = LineStatus.OFFLINE) }
+            markOffline(lineId, rev)
             setNotice(Notice.OFFLINE_ONLY)
             return
         }
-        update(lineId) { it.copy(status = LineStatus.REFINING) }
+        update(lineId, rev) { it.copy(status = LineStatus.REFINING) }
         refineSlots.withPermit {
             // Fell behind: newer lines matter more than old ones during live play.
             if (source.isLive && ids.get() - lineId > STALE_GAP) {
-                update(lineId) { it.copy(status = LineStatus.OFFLINE) }
+                markOffline(lineId, rev)
                 return@withPermit
             }
+            if (currentRev(lineId) != rev) return@withPermit
             busy(+1)
             try {
                 val s = settings.value
@@ -191,19 +242,19 @@ class LiveEngine(
                         is AiEvent.Started -> provider = event.target.label
                         is AiEvent.Delta -> {
                             acc.append(event.text)
-                            applyPartial(lineId, acc.toString())
+                            applyPartial(lineId, rev, acc.toString())
                         }
                     }
                 }
-                finish(lineId, acc.toString(), provider, source)
+                finish(lineId, rev, acc.toString(), provider, source)
                 clearNotice()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: AiException) {
-                update(lineId) { it.copy(status = LineStatus.OFFLINE) }
+                markOffline(lineId, rev)
                 setNotice(e.toNotice(), e.message)
             } catch (e: Exception) {
-                update(lineId) { it.copy(status = LineStatus.OFFLINE) }
+                markOffline(lineId, rev)
                 setNotice(Notice.NETWORK, e.message)
             } finally {
                 busy(-1)
@@ -211,39 +262,44 @@ class LiveEngine(
         }
     }
 
-    private fun applyPartial(lineId: Long, raw: String) {
+    private fun applyPartial(lineId: Long, rev: Int, raw: String) {
         if (LinePrompt.isSkip(raw)) return
         val parsed = LinePrompt.parseFirst(raw) ?: return
-        update(lineId) { line ->
+        val arDone = LinePrompt.isArComplete(raw)
+        update(lineId, rev) { line ->
+            val translation = parsed.translation.ifBlank { line.translation }
             line.copy(
-                translation = parsed.translation.ifBlank { line.translation },
+                translation = translation,
                 explanation = parsed.explanation.ifBlank { line.explanation },
                 slang = parsed.slang.ifEmpty { line.slang },
                 speaker = parsed.speaker.ifBlank { line.speaker },
+                arComplete = line.arComplete || (arDone && translation.isNotBlank()),
+                shown = if (line.shown.isBlank() && arDone && translation.isNotBlank()) translation else line.shown,
             )
         }
     }
 
-    private fun finish(lineId: Long, raw: String, provider: String, source: Source) {
+    private fun finish(lineId: Long, rev: Int, raw: String, provider: String, source: Source) {
+        if (currentRev(lineId) != rev) return
         if (LinePrompt.isSkip(raw)) {
             if (source.isLive) {
                 _lines.update { list -> list.filterNot { it.id == lineId } }
             } else {
-                update(lineId) { it.copy(status = LineStatus.DONE, provider = provider) }
+                update(lineId, rev) { it.copy(status = LineStatus.DONE, provider = provider, shown = it.shown.ifBlank { it.draft }) }
                 if (source == Source.MANUAL) setNotice(Notice.NOTHING_FOUND)
             }
             return
         }
         val parsed = LinePrompt.parseFirst(raw)
         if (parsed == null || parsed.translation.isBlank()) {
-            update(lineId) { it.copy(status = LineStatus.OFFLINE) }
+            markOffline(lineId, rev)
             return
         }
-        // The AI fixes OCR noise; if the corrected line duplicates a recent one, drop it.
+        // The AI fixes OCR noise; if the corrected line duplicates the previous one, drop it.
         if (source.isLive && parsed.original.isNotBlank()) {
             val norm = TextSimilarity.normalize(parsed.original)
             val duplicate = _lines.value
-                .filter { it.id != lineId }
+                .filter { it.id != lineId && it.id < lineId }
                 .take(DUPLICATE_WINDOW)
                 .any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.9 }
             if (duplicate) {
@@ -251,7 +307,7 @@ class LiveEngine(
                 return
             }
         }
-        update(lineId) { line ->
+        update(lineId, rev) { line ->
             line.copy(
                 original = parsed.original.ifBlank { line.original },
                 speaker = parsed.speaker,
@@ -260,9 +316,15 @@ class LiveEngine(
                 slang = parsed.slang,
                 status = LineStatus.DONE,
                 provider = provider,
+                arComplete = true,
+                shown = line.shown.ifBlank { parsed.translation },
             )
         }
         _lines.value.firstOrNull { it.id == lineId }?.let { _completed.tryEmit(it) }
+    }
+
+    private fun markOffline(lineId: Long, rev: Int) {
+        update(lineId, rev) { it.copy(status = LineStatus.OFFLINE, shown = it.shown.ifBlank { it.draft }) }
     }
 
     private fun isRecentDuplicate(text: String, source: Source): Boolean {
@@ -275,8 +337,7 @@ class LiveEngine(
         if (recent.any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.86 }) return true
 
         // Camera + microphone together: the same dialogue often arrives from both sources,
-        // split differently (one audio clip can span two subtitles). Skip a line whose words
-        // are already covered by what the other source captured moments ago.
+        // split differently. Skip a line whose words the other source already captured.
         val tokens = norm.split(' ').filter { it.length > 1 }
         if (tokens.size < 3) return false
         val pool = recent
@@ -285,7 +346,7 @@ class LiveEngine(
             .toHashSet()
         if (pool.isEmpty()) return false
         val covered = tokens.count { it in pool }.toDouble() / tokens.size
-        return covered >= 0.8
+        return covered >= 0.75
     }
 
     private fun recentOriginals(before: Long): List<String> =
@@ -296,8 +357,11 @@ class LiveEngine(
             .toList()
             .asReversed()
 
-    private fun update(id: Long, transform: (LiveLine) -> LiveLine) {
-        _lines.update { list -> list.map { if (it.id == id) transform(it) else it } }
+    private fun currentRev(id: Long): Int? = _lines.value.firstOrNull { it.id == id }?.rev
+
+    /** Applies [transform] only if the line still has revision [rev]. */
+    private fun update(id: Long, rev: Int, transform: (LiveLine) -> LiveLine) {
+        _lines.update { list -> list.map { if (it.id == id && it.rev == rev) transform(it) else it } }
     }
 
     private fun busy(delta: Int) {
@@ -321,5 +385,8 @@ class LiveEngine(
         const val DUPLICATE_WINDOW = 6
         const val DUPLICATE_WINDOW_MS = 45_000L
         const val CROSS_SOURCE_WINDOW_MS = 25_000L
+        const val AMEND_WINDOW_MS = 10_000L
+        /** How long to wait for the AI before showing the instant translation instead. */
+        const val STABLE_FALLBACK_MS = 2_200L
     }
 }

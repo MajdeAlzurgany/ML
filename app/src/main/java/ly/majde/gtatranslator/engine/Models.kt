@@ -27,8 +27,18 @@ data class LiveLine(
     val status: LineStatus = LineStatus.DRAFT,
     val provider: String = "",
     val timestamp: Long = System.currentTimeMillis(),
+    /**
+     * The sentence shown on screen in "stable" mode. Set once (AI translation as soon as it
+     * is complete, or the instant translation if the AI is slow/unavailable) and never changed.
+     */
+    val shown: String = "",
+    /** True once the AI has finished writing the translation itself (explanation may follow). */
+    val arComplete: Boolean = false,
+    /** Bumped when the line is re-read or retried, so late results of old work are ignored. */
+    val rev: Int = 0,
 ) {
     val bestTranslation: String get() = translation.ifBlank { draft }
+    val stableText: String get() = shown.ifBlank { if (status == LineStatus.DONE || status == LineStatus.OFFLINE) bestTranslation else "" }
 }
 
 data class ChatMessage(

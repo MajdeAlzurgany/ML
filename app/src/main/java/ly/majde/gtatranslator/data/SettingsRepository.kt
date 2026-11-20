@@ -33,6 +33,10 @@ class SettingsRepository(context: Context) {
             putString(K_MODE, new.liveMode.name)
             putFloat(K_MIC, new.micSensitivity)
             putFloat(K_SCALE, new.textScale)
+            putString(K_DISPLAY, new.displayMode.name)
+            putFloat(K_READING_SCALE, new.readingScale)
+            putInt(K_READING_COLOR, new.readingColor)
+            putBoolean(K_READING_PREVIOUS, new.readingShowPrevious)
             putBoolean(K_SHOW_ORIGINAL, new.showOriginal)
             putBoolean(K_SPEAK, new.speak)
             putBoolean(K_WEB_SEARCH, new.webSearch)
@@ -68,6 +72,10 @@ class SettingsRepository(context: Context) {
             liveMode = enumOr(prefs.getString(K_MODE, null), d.liveMode),
             micSensitivity = prefs.getFloat(K_MIC, d.micSensitivity).coerceIn(0f, 1f),
             textScale = prefs.getFloat(K_SCALE, d.textScale).coerceIn(0.8f, 1.8f),
+            displayMode = enumOr(prefs.getString(K_DISPLAY, null), d.displayMode),
+            readingScale = prefs.getFloat(K_READING_SCALE, d.readingScale).coerceIn(0.5f, 3f),
+            readingColor = prefs.getInt(K_READING_COLOR, d.readingColor).coerceIn(0, 2),
+            readingShowPrevious = prefs.getBoolean(K_READING_PREVIOUS, d.readingShowPrevious),
             showOriginal = prefs.getBoolean(K_SHOW_ORIGINAL, d.showOriginal),
             speak = prefs.getBoolean(K_SPEAK, d.speak),
             webSearch = prefs.getBoolean(K_WEB_SEARCH, d.webSearch),
@@ -97,6 +105,10 @@ class SettingsRepository(context: Context) {
         const val K_MODE = "live_mode"
         const val K_MIC = "mic_sensitivity"
         const val K_SCALE = "text_scale"
+        const val K_DISPLAY = "display_mode"
+        const val K_READING_SCALE = "reading_scale"
+        const val K_READING_COLOR = "reading_color"
+        const val K_READING_PREVIOUS = "reading_previous"
         const val K_SHOW_ORIGINAL = "show_original"
         const val K_SPEAK = "speak"
         const val K_WEB_SEARCH = "web_search"

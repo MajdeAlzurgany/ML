@@ -63,6 +63,15 @@ object LinePrompt {
         append("If there is nothing to translate, reply only: SKIP")
     }
 
+    private val afterAr = Regex("(?im)^\\s*\\**\\s*(WHY|SLANG)\\s*\\**\\s*[:：]")
+    private val arTag = Regex("(?im)^\\s*\\**\\s*AR\\s*\\**\\s*[:：]")
+
+    /** True when the streamed text already contains a tag after AR, i.e. the translation is final. */
+    fun isArComplete(raw: String): Boolean {
+        val ar = arTag.find(raw) ?: return false
+        return afterAr.containsMatchIn(raw.substring(ar.range.last + 1))
+    }
+
     fun isSkip(raw: String): Boolean = raw.trim().trimStart('*', ' ').uppercase().startsWith("SKIP")
 
     private val tag = Regex("^\\s*\\**\\s*(ORIGINAL|SPEAKER|AR|WHY|SLANG)\\s*\\**\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)

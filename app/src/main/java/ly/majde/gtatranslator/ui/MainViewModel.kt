@@ -2,6 +2,7 @@ package ly.majde.gtatranslator.ui
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.concurrent.TimeUnit
@@ -10,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -25,6 +28,7 @@ import ly.majde.gtatranslator.audio.SpeechSegmenter
 import ly.majde.gtatranslator.camera.ScanLine
 import ly.majde.gtatranslator.camera.SubtitleLocator
 import ly.majde.gtatranslator.camera.SubtitleTracker
+import ly.majde.gtatranslator.camera.TrackEvent
 import ly.majde.gtatranslator.camera.toJpegBytes
 import ly.majde.gtatranslator.data.AppSettings
 import ly.majde.gtatranslator.data.HistoryStore
@@ -58,6 +62,15 @@ sealed interface KeyCheck {
 }
 
 enum class ScanState { IDLE, SCANNING, FOUND, NOT_FOUND }
+
+data class HeroState(
+    val line: LiveLine? = null,
+    val previous: LiveLine? = null,
+    val frozen: Boolean = false,
+)
+
+private const val SUBTITLE_GONE_MS = 1_500L
+private const val VOICE_TAKEOVER_MS = 5_000L
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -121,6 +134,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     val lines: StateFlow<List<LiveLine>> = live.lines
+
+    // ---- What is shown big: follows the subtitle on screen -------------------------------
+
+    private val _frozenId = MutableStateFlow<Long?>(null)
+    /** When set, the main display stays on this line (long-press to hold a line while reading). */
+    val frozenId: StateFlow<Long?> = _frozenId.asStateFlow()
+
+    private val _reading = MutableStateFlow(false)
+    val reading: StateFlow<Boolean> = _reading.asStateFlow()
+
+    fun enterReading() {
+        _reading.value = true
+    }
+
+    fun exitReading() {
+        _reading.value = false
+    }
+
+    fun toggleFreeze() {
+        _frozenId.value = if (_frozenId.value != null) null else hero.value.line?.id
+    }
     val status: StateFlow<EngineStatus> = live.status
     val offlineState: StateFlow<OfflineTranslator.State> = offline.state
     val chatMessages: StateFlow<List<ChatMessage>> = chat.messages
@@ -194,10 +228,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _scanState = MutableStateFlow(ScanState.IDLE)
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
+    private val _subtitleOnScreen = MutableStateFlow(false)
+    /** True while the camera currently sees subtitle text inside the box. */
+    val subtitleOnScreen: StateFlow<Boolean> = _subtitleOnScreen.asStateFlow()
+    private var lastSubtitleSeenAt = 0L
+
     fun onOcrText(text: String) {
         if (_liveText.value != text) _liveText.value = text
+        val now = SystemClock.elapsedRealtime()
+        if (text.isNotBlank()) {
+            lastSubtitleSeenAt = now
+            if (!_subtitleOnScreen.value) _subtitleOnScreen.value = true
+        } else if (_subtitleOnScreen.value && now - lastSubtitleSeenAt > SUBTITLE_GONE_MS) {
+            _subtitleOnScreen.value = false
+        }
         if (_cameraPaused.value) return
-        tracker.offer(text)?.let { live.submitText(it, Source.CAMERA) }
+        when (val event = tracker.offer(text)) {
+            is TrackEvent.NewLine -> live.submitText(event.text, Source.CAMERA)
+            is TrackEvent.Amend -> live.amend(event.text)
+            null -> Unit
+        }
     }
 
     fun toggleCameraPaused() {
@@ -325,6 +375,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             _keyChecks.update { it + (provider to result) }
         }
+    }
+
+    /**
+     * The line shown big. In camera + mic mode the subtitle (camera) line has priority;
+     * a voice-only line takes over only when no subtitle has been seen for a few seconds.
+     */
+    val hero: StateFlow<HeroState> = combine(live.lines, settings, _frozenId, _subtitleOnScreen) { lines, s, frozen, onScreen ->
+        computeHero(lines, s.liveMode, frozen, onScreen)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, HeroState())
+
+    private fun computeHero(lines: List<LiveLine>, mode: LiveMode, frozen: Long?, onScreen: Boolean): HeroState {
+        if (lines.isEmpty()) return HeroState()
+        val frozenLine = frozen?.let { id -> lines.firstOrNull { it.id == id } }
+        val line = frozenLine ?: if (mode == LiveMode.BOTH) {
+            val subtitle = lines.firstOrNull { it.source != Source.AUDIO }
+            val voice = lines.firstOrNull { it.source == Source.AUDIO }
+            when {
+                subtitle == null -> voice
+                voice == null -> subtitle
+                voice.timestamp - subtitle.timestamp > VOICE_TAKEOVER_MS && !onScreen -> voice
+                else -> subtitle
+            }
+        } else {
+            lines.first()
+        }
+        val previous = line?.let { h -> lines.firstOrNull { it.id < h.id } }
+        return HeroState(line = line, previous = previous, frozen = frozenLine != null)
     }
 
     override fun onCleared() {

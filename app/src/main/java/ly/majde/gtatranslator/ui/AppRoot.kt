@@ -35,6 +35,7 @@ import ly.majde.gtatranslator.ui.screens.ChatScreen
 import ly.majde.gtatranslator.ui.screens.HistoryScreen
 import ly.majde.gtatranslator.ui.screens.LiveScreen
 import ly.majde.gtatranslator.ui.screens.OnboardingScreen
+import ly.majde.gtatranslator.ui.screens.ReadingOverlay
 import ly.majde.gtatranslator.ui.screens.SettingsScreen
 import ly.majde.gtatranslator.ui.screens.WordsScreen
 import ly.majde.gtatranslator.ui.theme.NightBrush
@@ -61,6 +62,10 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
         if (askRequest != null) tab = AppTab.CHAT
     }
 
+    val reading by vm.reading.collectAsStateWithLifecycle()
+    LaunchedEffect(tab) { if (tab != AppTab.LIVE) vm.exitReading() }
+
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = Color.Transparent,
         modifier = Modifier.background(NightBrush),
@@ -96,5 +101,8 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
                 AppTab.SETTINGS -> SettingsScreen(vm)
             }
         }
+    }
+    // Full-screen reading sits on top; the live screen (camera/mic) keeps running underneath.
+    if (reading && tab == AppTab.LIVE) ReadingOverlay(vm)
     }
 }
