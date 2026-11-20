@@ -24,6 +24,8 @@ data class AppRelease(
     val apkUrl: String,
     val pageUrl: String,
     val sizeBytes: Long,
+    /** "What's new" text from the GitHub release. */
+    val notes: String = "",
 )
 
 sealed interface UpdateState {
@@ -47,10 +49,16 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
 
     private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
 
-    suspend fun check(force: Boolean = false) {
+    /**
+     * Looks for a newer release. [minIntervalMs] avoids hammering GitHub when the app is
+     * opened repeatedly; [userInitiated] shows errors instead of failing silently.
+     */
+    suspend fun check(minIntervalMs: Long = 0L, userInitiated: Boolean = false) {
+        val force = userInitiated
         val now = System.currentTimeMillis()
-        if (!force && now - prefs.getLong(K_LAST_CHECK, 0L) < CHECK_INTERVAL_MS) return
-        if (_state.value is UpdateState.Downloading) return
+        if (!force && now - prefs.getLong(K_LAST_CHECK, 0L) < minIntervalMs) return
+        val current = _state.value
+        if (current is UpdateState.Downloading || current is UpdateState.ReadyToInstall) return
         _state.value = UpdateState.Checking
         _state.value = try {
             val latest = fetchLatest()
@@ -133,6 +141,7 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
                             apkUrl = a.optString("browser_download_url"),
                             pageUrl = r.optString("html_url"),
                             sizeBytes = a.optLong("size"),
+                            notes = r.optString("body").trim(),
                         )
                     }
                 }
@@ -177,6 +186,5 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
         private const val TAG_PREFIX = "gta6-v"
         private const val APK_MIME = "application/vnd.android.package-archive"
         private const val K_LAST_CHECK = "last_check"
-        private const val CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
     }
 }

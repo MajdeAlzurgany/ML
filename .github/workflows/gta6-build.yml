@@ -92,7 +92,7 @@ jobs:
           gh release create "gta6-v${VERSION_NAME}" out/*.apk \
             --target "${GITHUB_SHA}" \
             --title "GTA VI Live Translator v${VERSION_NAME}" \
-            --notes "Automated build from ${GITHUB_SHA::7}. Download the APK below and install it on your Android phone." \
+            --notes-file release-notes.md \
             --latest
 
       - uses: actions/upload-artifact@v4

@@ -19,6 +19,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,9 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ly.majde.gtatranslator.R
+import ly.majde.gtatranslator.ui.components.UpdateDialog
 import ly.majde.gtatranslator.ui.screens.ChatScreen
 import ly.majde.gtatranslator.ui.screens.HistoryScreen
 import ly.majde.gtatranslator.ui.screens.LiveScreen
@@ -64,6 +69,18 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
 
     val reading by vm.reading.collectAsStateWithLifecycle()
     LaunchedEffect(tab) { if (tab != AppTab.LIVE) vm.exitReading() }
+
+    // Look for a new version whenever the app comes back to the foreground.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) vm.onAppForeground()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val update by vm.updateState.collectAsStateWithLifecycle()
+    val postponed by vm.updatePopupDismissed.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -105,4 +122,13 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
     // Full-screen reading sits on top; the live screen (camera/mic) keeps running underneath.
     if (reading && tab == AppTab.LIVE) ReadingOverlay(vm)
     }
+
+    UpdateDialog(
+        state = update,
+        dismissedVersion = postponed,
+        onUpdate = vm::installUpdate,
+        onInstall = vm::retryInstall,
+        onLater = vm::postponeUpdate,
+        onBrowser = vm::openUpdateInBrowser,
+    )
 }

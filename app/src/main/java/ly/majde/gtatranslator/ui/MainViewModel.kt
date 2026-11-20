@@ -71,6 +71,7 @@ data class HeroState(
 
 private const val SUBTITLE_GONE_MS = 1_500L
 private const val VOICE_TAKEOVER_MS = 5_000L
+private const val FOREGROUND_CHECK_MS = 10 * 60 * 1000L
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -102,6 +103,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         wordsEngine = WordsEngine(store.loadWords())
 
         viewModelScope.launch { offline.prepare() }
+        // Every time the app starts: look for a new version (shows the update pop-up).
         viewModelScope.launch { updater.check() }
         story.maybeOfferRecap()
 
@@ -322,7 +324,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Updates -----------------------------------------------------------------------------
 
     fun checkForUpdates() {
-        viewModelScope.launch { updater.check(force = true) }
+        viewModelScope.launch { updater.check(userInitiated = true) }
+    }
+
+    /** Called whenever the app comes back to the foreground. */
+    fun onAppForeground() {
+        viewModelScope.launch { updater.check(minIntervalMs = FOREGROUND_CHECK_MS) }
+    }
+
+    private val _updatePopupDismissed = MutableStateFlow<Int?>(null)
+    /** Version the user answered "later" to in this session (the pop-up won't nag again). */
+    val updatePopupDismissed: StateFlow<Int?> = _updatePopupDismissed.asStateFlow()
+
+    fun postponeUpdate(release: AppRelease) {
+        _updatePopupDismissed.value = release.versionCode
     }
 
     fun installUpdate(release: AppRelease) {

@@ -214,6 +214,7 @@ private fun LiveHeader(
 
 @Composable
 private fun UpdateBanner(state: UpdateState, vm: MainViewModel) {
+    val postponed by vm.updatePopupDismissed.collectAsStateWithLifecycle()
     val release = when (state) {
         is UpdateState.Available -> state.release
         is UpdateState.Downloading -> state.release
@@ -221,6 +222,8 @@ private fun UpdateBanner(state: UpdateState, vm: MainViewModel) {
         is UpdateState.Failed -> state.release
         else -> null
     } ?: return
+    // The pop-up handles updates; this small card only stays after "Later".
+    if (postponed != release.versionCode) return
     val colors = MaterialTheme.colorScheme
     GlowCard(
         modifier = Modifier

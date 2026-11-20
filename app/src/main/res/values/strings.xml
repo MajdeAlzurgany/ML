@@ -230,4 +230,12 @@
     <string name="reading_frozen">الجملة مثبتة · اضغط مطوّل باش تكمل</string>
     <string name="reading_frozen_short">مثبتة</string>
     <string name="reading_gestures">لمسة: الأزرار · لمستين: الشرح · ضغط مطوّل: ثبّت الجملة · قرصة: حجم الخط</string>
+    <!-- v5: update pop-up -->
+    <string name="update_dialog_title">نسخة جديدة جاهزة: %1$s</string>
+    <string name="update_whats_new">شن الجديد:</string>
+    <string name="update_size">الحجم: %1$.0f ميغا</string>
+    <string name="update_downloading">قاعد يحمّل… بعدها تطلعلك شاشة التثبيت.</string>
+    <string name="update_ready_hint">لو ما طلعتلكش شاشة التثبيت، اسمح للتطبيق بتثبيت التطبيقات من الإعدادات ودوس ثبّت.</string>
+    <string name="update_failed_install">ما كملش التحميل. عاود، أو نزّلها من المتصفح.</string>
+    <string name="update_later">بعدين</string>
 </resources>
