@@ -1,14 +1,22 @@
 package ly.majde.gtatranslator.update
 
-import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Environment
+import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,16 +41,32 @@ sealed interface UpdateState {
     data object Checking : UpdateState
     data object UpToDate : UpdateState
     data class Available(val release: AppRelease) : UpdateState
-    data class Downloading(val release: AppRelease, val progress: Float) : UpdateState
+    data class Downloading(
+        val release: AppRelease,
+        val progress: Float,
+        val downloadedBytes: Long = 0L,
+        val totalBytes: Long = 0L,
+    ) : UpdateState
     data class ReadyToInstall(val release: AppRelease, val apk: Uri) : UpdateState
     data class Failed(val release: AppRelease?) : UpdateState
+    /** The new APK is signed with another key: Android would refuse it, a manual reinstall is needed. */
+    data class SignatureMismatch(val release: AppRelease) : UpdateState
 }
 
 /**
- * Checks GitHub Releases for a newer build and installs it in-app:
- * download with the system DownloadManager, then hand the APK to the package installer.
+ * Checks GitHub Releases for a newer build and installs it in-app.
+ * Downloads with the app's own HTTP client (the system DownloadManager can silently wait
+ * for Wi-Fi on mobile data), shows real progress, resumes after a dropped connection,
+ * and checks the signing key before handing the APK to the installer.
  */
-class UpdateManager(private val context: Context, private val http: OkHttpClient) {
+class UpdateManager(private val context: Context, http: OkHttpClient) {
+
+    private val apiClient = http
+    private val downloadClient = http.newBuilder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
+        .build()
 
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -54,9 +78,8 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
      * opened repeatedly; [userInitiated] shows errors instead of failing silently.
      */
     suspend fun check(minIntervalMs: Long = 0L, userInitiated: Boolean = false) {
-        val force = userInitiated
         val now = System.currentTimeMillis()
-        if (!force && now - prefs.getLong(K_LAST_CHECK, 0L) < minIntervalMs) return
+        if (!userInitiated && now - prefs.getLong(K_LAST_CHECK, 0L) < minIntervalMs) return
         val current = _state.value
         if (current is UpdateState.Downloading || current is UpdateState.ReadyToInstall) return
         _state.value = UpdateState.Checking
@@ -67,23 +90,29 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (force) UpdateState.Failed(null) else UpdateState.Idle
+            if (userInitiated) UpdateState.Failed(null) else UpdateState.Idle
         }
     }
 
     suspend fun downloadAndInstall(release: AppRelease) {
-        _state.value = UpdateState.Downloading(release, 0f)
-        val uri = try {
+        _state.value = UpdateState.Downloading(release, 0f, 0L, release.sizeBytes)
+        val file = try {
             download(release)
         } catch (e: CancellationException) {
+            _state.value = UpdateState.Available(release)
             throw e
         } catch (e: Exception) {
             null
         }
-        if (uri == null) {
+        if (file == null) {
             _state.value = UpdateState.Failed(release)
             return
         }
+        if (sameSigner(file) == false) {
+            _state.value = UpdateState.SignatureMismatch(release)
+            return
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
         _state.value = UpdateState.ReadyToInstall(release, uri)
         install(uri)
     }
@@ -118,7 +147,7 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
             .header("Accept", "application/vnd.github+json")
             .get()
             .build()
-        http.newCall(request).execute().use { resp ->
+        apiClient.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) return@withContext null
             val arr = JSONArray(resp.body?.string().orEmpty())
             var best: AppRelease? = null
@@ -132,8 +161,7 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
                 val assets = r.optJSONArray("assets") ?: continue
                 for (j in 0 until assets.length()) {
                     val a = assets.optJSONObject(j) ?: continue
-                    val name = a.optString("name")
-                    if (!name.endsWith(".apk")) continue
+                    if (!a.optString("name").endsWith(".apk")) continue
                     if (best == null || code > best.versionCode) {
                         best = AppRelease(
                             versionCode = code,
@@ -150,41 +178,100 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
         }
     }
 
-    private suspend fun download(release: AppRelease): Uri? {
-        val dm = context.getSystemService(DownloadManager::class.java) ?: return null
-        val fileName = "gta6-translator-${release.versionName}.apk"
-        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.resolve(fileName)?.delete()
-        val request = DownloadManager.Request(Uri.parse(release.apkUrl))
-            .setTitle("مترجم GTA VI ${release.versionName}")
-            .setMimeType(APK_MIME)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-        val id = dm.enqueue(request)
-        while (true) {
-            delay(400)
-            val cursor = dm.query(DownloadManager.Query().setFilterById(id)) ?: return null
-            cursor.use { c ->
-                if (!c.moveToFirst()) return null
-                val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                val done = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                val total = c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> return dm.getUriForDownloadedFile(id)
-                    DownloadManager.STATUS_FAILED -> return null
-                    else -> {
-                        val size = if (total > 0) total else release.sizeBytes
-                        val progress = if (size > 0) (done.toFloat() / size).coerceIn(0f, 1f) else 0f
-                        _state.value = UpdateState.Downloading(release, progress)
+    /** Downloads to the app cache with progress; resumes with an HTTP Range request after drops. */
+    private suspend fun download(release: AppRelease): File? = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
+        dir.listFiles()?.forEach { if (!it.name.startsWith(release.versionName)) it.delete() }
+        val part = File(dir, "${release.versionName}.apk.part")
+        val done = File(dir, "${release.versionName}.apk")
+        if (done.exists() && (release.sizeBytes <= 0L || done.length() == release.sizeBytes)) return@withContext done
+
+        var attempt = 0
+        while (attempt < MAX_ATTEMPTS) {
+            attempt++
+            try {
+                val existing = if (part.exists()) part.length() else 0L
+                val request = Request.Builder().url(release.apkUrl).apply {
+                    if (existing > 0L) header("Range", "bytes=$existing-")
+                }.build()
+                downloadClient.newCall(request).execute().use { resp ->
+                    if (resp.code == 416) {
+                        part.delete()
+                        throw IOException("Range not satisfiable")
                     }
+                    if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+                    val body = resp.body ?: throw IOException("Empty body")
+                    val append = resp.code == 206 && existing > 0L
+                    val length = body.contentLength()
+                    val total = when {
+                        append && length > 0L -> existing + length
+                        length > 0L -> length
+                        else -> release.sizeBytes
+                    }
+                    var written = if (append) existing else 0L
+                    var lastEmit = 0L
+                    FileOutputStream(part, append).use { out ->
+                        val input = body.byteStream()
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            ensureActive()
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            written += n
+                            val now = SystemClock.elapsedRealtime()
+                            if (now - lastEmit > 250L) {
+                                lastEmit = now
+                                val progress = if (total > 0L) (written.toFloat() / total).coerceIn(0f, 1f) else 0f
+                                _state.value = UpdateState.Downloading(release, progress, written, total)
+                            }
+                        }
+                    }
+                    if (total > 0L && written < total) throw IOException("Incomplete download")
                 }
+                if (!part.renameTo(done)) {
+                    part.copyTo(done, overwrite = true)
+                    part.delete()
+                }
+                return@withContext done
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                // Weak network: wait a little and continue from where it stopped.
+                delay(1_500L * attempt)
             }
         }
+        null
     }
+
+    /** True if the downloaded APK is signed with the same key as this app (null = unknown). */
+    private fun sameSigner(apk: File): Boolean? = try {
+        val pm = context.packageManager
+        @Suppress("DEPRECATION")
+        val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        val archive = pm.getPackageArchiveInfo(apk.path, flags)
+        @Suppress("DEPRECATION")
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        val a = archive?.let { signers(it) }.orEmpty()
+        val b = signers(installed)
+        if (a.isEmpty() || b.isEmpty()) null else a == b
+    } catch (e: Exception) {
+        null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signers(info: PackageInfo): Set<String> =
+        if (Build.VERSION.SDK_INT >= 28) {
+            info.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet().orEmpty()
+        } else {
+            info.signatures?.map { it.toCharsString() }?.toSet().orEmpty()
+        }
 
     companion object {
         const val REPO = "MajdeAlzurgany/ML"
         private const val TAG_PREFIX = "gta6-v"
         private const val APK_MIME = "application/vnd.android.package-archive"
         private const val K_LAST_CHECK = "last_check"
+        private const val MAX_ATTEMPTS = 6
     }
 }

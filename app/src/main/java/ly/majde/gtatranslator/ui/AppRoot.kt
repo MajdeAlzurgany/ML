@@ -130,5 +130,6 @@ fun AppRoot(vm: MainViewModel = viewModel()) {
         onInstall = vm::retryInstall,
         onLater = vm::postponeUpdate,
         onBrowser = vm::openUpdateInBrowser,
+        onCancel = vm::cancelUpdate,
     )
 }

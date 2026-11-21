@@ -37,12 +37,14 @@ fun UpdateDialog(
     onInstall: () -> Unit,
     onLater: (AppRelease) -> Unit,
     onBrowser: (AppRelease) -> Unit,
+    onCancel: () -> Unit,
 ) {
     val release = when (state) {
         is UpdateState.Available -> state.release
         is UpdateState.Downloading -> state.release
         is UpdateState.ReadyToInstall -> state.release
         is UpdateState.Failed -> state.release
+        is UpdateState.SignatureMismatch -> state.release
         else -> null
     } ?: return
     if (dismissedVersion == release.versionCode) return
@@ -76,7 +78,21 @@ fun UpdateDialog(
                     is UpdateState.Downloading -> {
                         Text(stringResource(R.string.update_downloading), style = MaterialTheme.typography.bodySmall)
                         LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            stringResource(
+                                R.string.update_progress_mb,
+                                state.downloadedBytes / 1_000_000f,
+                                (if (state.totalBytes > 0L) state.totalBytes else release.sizeBytes) / 1_000_000f,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
+                    is UpdateState.SignatureMismatch -> Text(
+                        stringResource(R.string.update_signature_mismatch),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                     is UpdateState.Failed -> Text(
                         stringResource(R.string.update_failed_install),
                         style = MaterialTheme.typography.bodySmall,
@@ -94,13 +110,16 @@ fun UpdateDialog(
         confirmButton = {
             when (state) {
                 is UpdateState.Downloading -> Unit
+                is UpdateState.SignatureMismatch -> Button(onClick = { onBrowser(release) }) { Text(stringResource(R.string.update_browser)) }
                 is UpdateState.ReadyToInstall -> Button(onClick = onInstall) { Text(stringResource(R.string.update_install)) }
                 is UpdateState.Failed -> Button(onClick = { onUpdate(release) }) { Text(stringResource(R.string.update_retry)) }
                 else -> Button(onClick = { onUpdate(release) }) { Text(stringResource(R.string.update_now)) }
             }
         },
         dismissButton = {
-            if (!downloading) {
+            if (downloading) {
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
+            } else {
                 if (state is UpdateState.Failed) {
                     TextButton(onClick = { onBrowser(release) }) { Text(stringResource(R.string.update_browser)) }
                 } else {

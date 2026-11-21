@@ -487,6 +487,11 @@ private fun UpdatesSection(vm: MainViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
+            is UpdateState.SignatureMismatch -> Text(
+                stringResource(R.string.update_signature_mismatch),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
             UpdateState.Idle -> Unit
         }
         OutlinedButton(onClick = vm::checkForUpdates) { Text(stringResource(R.string.update_check)) }

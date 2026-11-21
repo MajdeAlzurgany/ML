@@ -340,8 +340,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _updatePopupDismissed.value = release.versionCode
     }
 
+    private var updateJob: Job? = null
+
     fun installUpdate(release: AppRelease) {
-        viewModelScope.launch { updater.downloadAndInstall(release) }
+        if (updateJob?.isActive == true) return
+        updateJob = viewModelScope.launch { updater.downloadAndInstall(release) }
+    }
+
+    fun cancelUpdate() {
+        updateJob?.cancel()
+        updateJob = null
     }
 
     fun retryInstall() {

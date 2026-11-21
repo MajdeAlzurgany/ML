@@ -243,4 +243,7 @@
     <string name="captions_back_live">رجوع للمباشر</string>
     <string name="captions_explaining">الشرح قاعد يتكتب…</string>
     <string name="reading_toggle_english">إظهار أو إخفاء الإنجليزي</string>
+    <!-- v6: in-app updater -->
+    <string name="update_progress_mb">%1$.1f من %2$.1f ميغا</string>
+    <string name="update_signature_mismatch">النسخة هذي موقّعة بمفتاح مختلف، وأندرويد ما يقبلش يثبّتها فوق القديمة. نزّلها من المتصفح، وامسح القديمة وثبّتها مرة وحدة.</string>
 </resources>

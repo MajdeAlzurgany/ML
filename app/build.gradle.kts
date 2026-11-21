@@ -78,6 +78,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // Compress native libraries inside the APK: roughly halves the download size,
+        // which matters for updates over mobile data.
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
     lint {
         checkReleaseBuilds = false
