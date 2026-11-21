@@ -217,7 +217,7 @@
     <string name="display_mode_help">كيف تطلع الترجمة الكبيرة وأنت تقرا:</string>
     <string name="display_stable">جملة كاملة ثابتة (مستحسن): تطلع مرة وحدة كاملة وما تتغيرش</string>
     <string name="display_words">كلمة بكلمة: الكلمات تطلع ورا بعض في مكانها بدون ما شي يتحرك</string>
-    <string name="display_instant">فورية: تطلع بسرعة وتتحسن قدامك (تتغير)</string>
+    <string name="display_instant">فورية: ترجمة الجهاز تطلع طول، وتتبدل مرة وحدة بس بالترجمة الذكية</string>
     <string name="reading_show_previous">بيّن الجملة اللي قبلها صغيرة فوق</string>
     <string name="reading_open">وضع القراءة بكامل الشاشة</string>
     <string name="reading_close">خروج</string>
@@ -229,7 +229,7 @@
     <string name="reading_waiting">أول ما يطلع subtitle في اللعبة، الترجمة تطلع هني كبيرة.</string>
     <string name="reading_frozen">الجملة مثبتة · اضغط مطوّل باش تكمل</string>
     <string name="reading_frozen_short">مثبتة</string>
-    <string name="reading_gestures">لمسة: الأزرار · لمستين: الشرح · ضغط مطوّل: ثبّت الجملة · قرصة: حجم الخط</string>
+    <string name="reading_gestures">لمسة على جملة: الشرح · لمستين: الإنجليزي · ضغط مطوّل: وقّف التمرير · اسحب لفوق: اقرا اللي فات</string>
     <!-- v5: update pop-up -->
     <string name="update_dialog_title">نسخة جديدة جاهزة: %1$s</string>
     <string name="update_whats_new">شن الجديد:</string>
@@ -238,4 +238,9 @@
     <string name="update_ready_hint">لو ما طلعتلكش شاشة التثبيت، اسمح للتطبيق بتثبيت التطبيقات من الإعدادات ودوس ثبّت.</string>
     <string name="update_failed_install">ما كملش التحميل. عاود، أو نزّلها من المتصفح.</string>
     <string name="update_later">بعدين</string>
+    <!-- v5: rolling captions -->
+    <string name="captions_new_lines">%1$d جمل جديدة</string>
+    <string name="captions_back_live">رجوع للمباشر</string>
+    <string name="captions_explaining">الشرح قاعد يتكتب…</string>
+    <string name="reading_toggle_english">إظهار أو إخفاء الإنجليزي</string>
 </resources>

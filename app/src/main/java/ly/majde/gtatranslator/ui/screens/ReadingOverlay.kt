@@ -27,7 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FormatColorText
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
@@ -69,10 +69,11 @@ import ly.majde.gtatranslator.data.LiveMode
 import ly.majde.gtatranslator.engine.LineStatus
 import ly.majde.gtatranslator.engine.Source
 import ly.majde.gtatranslator.ui.MainViewModel
-import ly.majde.gtatranslator.ui.components.DisplayTranslation
+import androidx.compose.foundation.layout.PaddingValues
+import ly.majde.gtatranslator.ui.components.CaptionStack
+import ly.majde.gtatranslator.ui.components.CaptionStyle
+import ly.majde.gtatranslator.ui.components.rememberLineActions
 import ly.majde.gtatranslator.ui.components.KeepScreenOn
-import ly.majde.gtatranslator.ui.components.finalTextFor
-import ly.majde.gtatranslator.ui.components.rememberFitFontSize
 import ly.majde.gtatranslator.ui.theme.OceanTeal
 import ly.majde.gtatranslator.ui.theme.SunsetOrange
 
@@ -87,7 +88,6 @@ private val READING_COLORS = listOf(Color(0xFFF7F4FB), Color(0xFFFFE066), OceanT
 fun ReadingOverlay(vm: MainViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val hero by vm.hero.collectAsStateWithLifecycle()
-    val onScreen by vm.subtitleOnScreen.collectAsStateWithLifecycle()
 
     BackHandler { vm.exitReading() }
     KeepScreenOn()
@@ -106,7 +106,7 @@ fun ReadingOverlay(vm: MainViewModel) {
             controlsVisible = false
         }
     }
-    var showDetails by rememberSaveable { mutableStateOf(false) }
+    var showOriginal by rememberSaveable { mutableStateOf(settings.showOriginal) }
     val textColor = READING_COLORS[settings.readingColor.coerceIn(0, READING_COLORS.lastIndex)]
 
     Box(
@@ -124,106 +124,39 @@ fun ReadingOverlay(vm: MainViewModel) {
                         controlsVisible = !controlsVisible
                         interaction++
                     },
-                    onDoubleTap = { showDetails = !showDetails },
+                    onDoubleTap = { showOriginal = !showOriginal },
                     onLongPress = { vm.toggleFreeze() },
                 )
             },
     ) {
-        val line = hero.line
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 28.dp, vertical = 36.dp)
-        ) {
-            if (line == null) {
+        val lines by vm.lines.collectAsStateWithLifecycle()
+        val actions = rememberLineActions(vm)
+        CaptionStack(
+            lines = lines,
+            mode = settings.displayMode,
+            showOriginal = showOriginal,
+            style = CaptionStyle(
+                newestSp = 36f * scale,
+                recentSp = 26f * scale,
+                olderSp = 20f * scale,
+                color = textColor,
+                originalColor = Color.White.copy(alpha = 0.5f),
+                centered = true,
+            ),
+            actions = actions,
+            paused = hero.frozen,
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 84.dp, bottom = 56.dp),
+            emptyContent = {
                 Text(
                     stringResource(R.string.reading_waiting),
                     style = MaterialTheme.typography.titleLarge,
                     color = textColor.copy(alpha = 0.5f),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier.padding(32.dp),
                 )
-            } else {
-                val dim by animateFloatAsState(
-                    targetValue = if (settings.liveMode != LiveMode.MIC && line.source == Source.CAMERA && !onScreen && !hero.frozen) 0.55f else 1f,
-                    animationSpec = tween(500),
-                    label = "dim",
-                )
-                val headline = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                // Size the text for its final length (or the instant translation), so it never shrinks mid-sentence.
-                val sample = listOf(finalTextFor(line, settings.displayMode), line.translation, line.draft).maxByOrNull { it.length }.orEmpty()
-                val fontSize = rememberFitFontSize(
-                    sampleText = sample,
-                    style = headline,
-                    maxWidth = maxWidth,
-                    maxHeight = maxHeight * (if (showDetails) 0.42f else 0.6f),
-                    maxFontSizeSp = 40f * scale,
-                )
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    val previous = hero.previous
-                    if (settings.readingShowPrevious && previous != null) {
-                        Text(
-                            previous.shown.ifBlank { previous.bestTranslation },
-                            style = MaterialTheme.typography.titleMedium.copy(fontSize = (16f * scale.coerceIn(0.8f, 1.6f)).sp),
-                            color = textColor.copy(alpha = 0.32f),
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                        )
-                        Spacer(Modifier.height(28.dp))
-                    }
-                    if (line.speaker.isNotBlank()) {
-                        Text(line.speaker, style = MaterialTheme.typography.titleMedium, color = SunsetOrange, modifier = Modifier.alpha(dim))
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    DisplayTranslation(
-                        line = line,
-                        mode = settings.displayMode,
-                        style = headline.copy(fontSize = fontSize.sp, lineHeight = (fontSize * 1.35f).sp),
-                        color = textColor,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .alpha(dim),
-                    )
-                    if (settings.showOriginal && line.original.isNotBlank()) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            line.original,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                textDirection = TextDirection.Content,
-                                fontSize = (16f * scale.coerceIn(0.8f, 1.5f)).sp,
-                            ),
-                            color = Color.White.copy(alpha = 0.45f * dim),
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                    if (showDetails && line.status == LineStatus.DONE) {
-                        Spacer(Modifier.height(20.dp))
-                        if (line.explanation.isNotBlank()) {
-                            Text(
-                                "💡 " + line.explanation,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = (17f * scale.coerceIn(0.8f, 1.4f)).sp),
-                                color = Color.White.copy(alpha = 0.85f),
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-                        line.slang.take(4).forEach { term ->
-                            Text(
-                                "${term.term} — ${term.meaning}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = OceanTeal,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
 
         if (hero.frozen) {
             Surface(
@@ -269,9 +202,9 @@ fun ReadingOverlay(vm: MainViewModel) {
                         )
                     }
                     IconButton(onClick = {
-                        showDetails = !showDetails
+                        showOriginal = !showOriginal
                         interaction++
-                    }) { Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.reading_details)) }
+                    }) { Icon(Icons.Filled.Translate, contentDescription = stringResource(R.string.reading_toggle_english)) }
                     IconButton(onClick = {
                         scale = (scale - 0.15f).coerceAtLeast(0.5f)
                         interaction++

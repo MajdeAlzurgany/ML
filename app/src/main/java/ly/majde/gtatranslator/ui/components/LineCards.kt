@@ -306,7 +306,7 @@ fun SlangChips(line: LiveLine, actions: LineActionsHandler) {
 }
 
 @Composable
-private fun LineActions(line: LiveLine, actions: LineActionsHandler) {
+fun LineActions(line: LiveLine, actions: LineActionsHandler) {
     val clipboard = LocalClipboardManager.current
     val lineSaved = actions.isSaved(line.original)
     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -295,13 +295,15 @@ class LiveEngine(
             markOffline(lineId, rev)
             return
         }
-        // The AI fixes OCR noise; if the corrected line duplicates the previous one, drop it.
+        // The AI fixes OCR noise; if the corrected line is clearly the one just before, drop it.
+        // Only very close in time, so a character repeating a line later is never removed.
         if (source.isLive && parsed.original.isNotBlank()) {
             val norm = TextSimilarity.normalize(parsed.original)
-            val duplicate = _lines.value
-                .filter { it.id != lineId && it.id < lineId }
-                .take(DUPLICATE_WINDOW)
-                .any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.9 }
+            val self = _lines.value.firstOrNull { it.id == lineId }
+            val duplicate = self != null && _lines.value
+                .filter { it.id < lineId && self.timestamp - it.timestamp < DUPLICATE_WINDOW_MS }
+                .take(2)
+                .any { TextSimilarity.similarity(TextSimilarity.normalize(it.original), norm) >= 0.92 }
             if (duplicate) {
                 _lines.update { list -> list.filterNot { it.id == lineId } }
                 return
@@ -378,15 +380,15 @@ class LiveEngine(
 
     private companion object {
         const val MAX_LINES = 2_000
-        const val MAX_PARALLEL_REFINES = 2
+        const val MAX_PARALLEL_REFINES = 3
         const val MAX_PARALLEL_TRANSCRIBE = 2
-        const val STALE_GAP = 4
+        const val STALE_GAP = 8
         const val CONTEXT_LINES = 3
         const val DUPLICATE_WINDOW = 6
-        const val DUPLICATE_WINDOW_MS = 45_000L
+        const val DUPLICATE_WINDOW_MS = 8_000L
         const val CROSS_SOURCE_WINDOW_MS = 25_000L
         const val AMEND_WINDOW_MS = 10_000L
         /** How long to wait for the AI before showing the instant translation instead. */
-        const val STABLE_FALLBACK_MS = 2_200L
+        const val STABLE_FALLBACK_MS = 1_500L
     }
 }

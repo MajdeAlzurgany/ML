@@ -33,10 +33,10 @@ object LinePrompt {
         return """
             You translate dialogue from the video game Grand Theft Auto VI (Leonida is Rockstar's version of Florida, with Vice City; the leads are Jason and Lucia) for an Arabic-speaking player from Libya.
             Translate into ${styleText(style)}.
-            Reply in EXACTLY this format and nothing else:
+            Reply in EXACTLY this format and nothing else (the AR line must come first, it is shown live):
+            AR: <natural translation; keep names as they are; keep the tone, sarcasm and humor; for profanity use an equivalent register, never more graphic>
             ORIGINAL: <the line in clean English or Spanish; silently fix obvious OCR or speech-recognition errors>
             SPEAKER: <speaker name if it is shown, otherwise ->
-            AR: <natural translation; keep names as they are; keep the tone, sarcasm and humor; for profanity use an equivalent register, never more graphic>
             WHY: <$why explaining the real meaning, subtext, joke, slang or cultural reference; "-" if the line is obvious>
             SLANG: <term = short Arabic meaning | term = meaning ... or ->
             If the input is not dialogue or a meaningful game sentence (HUD numbers, menus, button prompts, song lyrics, gibberish), reply only: SKIP
@@ -63,7 +63,7 @@ object LinePrompt {
         append("If there is nothing to translate, reply only: SKIP")
     }
 
-    private val afterAr = Regex("(?im)^\\s*\\**\\s*(WHY|SLANG)\\s*\\**\\s*[:：]")
+    private val afterAr = Regex("(?im)^\\s*\\**\\s*(ORIGINAL|SPEAKER|WHY|SLANG)\\s*\\**\\s*[:：]")
     private val arTag = Regex("(?im)^\\s*\\**\\s*AR\\s*\\**\\s*[:：]")
 
     /** True when the streamed text already contains a tag after AR, i.e. the translation is final. */

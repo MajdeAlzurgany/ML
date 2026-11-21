@@ -94,6 +94,8 @@ import ly.majde.gtatranslator.translate.OfflineTranslator
 import ly.majde.gtatranslator.ui.MainViewModel
 import ly.majde.gtatranslator.ui.ScanState
 import ly.majde.gtatranslator.ui.components.CameraHandle
+import ly.majde.gtatranslator.ui.components.CaptionStack
+import ly.majde.gtatranslator.ui.components.CaptionStyle
 import ly.majde.gtatranslator.ui.components.CompactLineRow
 import ly.majde.gtatranslator.ui.components.GlowCard
 import ly.majde.gtatranslator.ui.components.GradientIcon
@@ -286,7 +288,7 @@ private fun CameraSource(vm: MainViewModel, settings: AppSettings, modifier: Mod
     val scanState by vm.scanState.collectAsStateWithLifecycle()
     var roi by remember(settings.roi) { mutableStateOf(settings.roi) }
     var zoom by rememberSaveable { mutableFloatStateOf(0f) }
-    var compact by rememberSaveable { mutableStateOf(false) }
+    var compact by rememberSaveable { mutableStateOf(settings.roiConfigured) }
     val handle = remember { CameraHandle() }
     val hybrid = settings.liveMode == LiveMode.BOTH
 
@@ -521,44 +523,35 @@ private fun MicSource(vm: MainViewModel, settings: AppSettings, modifier: Modifi
 private fun Feed(vm: MainViewModel, settings: AppSettings, lines: List<LiveLine>, modifier: Modifier) {
     val story by vm.storyState.collectAsStateWithLifecycle()
     val hero by vm.hero.collectAsStateWithLifecycle()
-    val onScreen by vm.subtitleOnScreen.collectAsStateWithLifecycle()
     val actions = rememberLineActions(vm)
-    val listState = rememberLazyListState()
-    val heroLine = hero.line
-    // Follow new lines only if the reader is at the top (never yank them away from history).
-    LaunchedEffect(heroLine?.id) {
-        if (heroLine != null && listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0)
-    }
-    val others = remember(lines, heroLine?.id) { lines.filter { it.id != heroLine?.id }.take(RECENT_IN_FEED) }
-
-    LazyColumn(
-        modifier = modifier,
-        state = listState,
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    val colors = MaterialTheme.colorScheme
+    val scale = settings.textScale
+    Column(modifier) {
         if (story.showRecapCard) {
-            item(key = "recap") { RecapCard(story.recap, story.loadingRecap, onDismiss = vm::dismissRecapCard) }
-        }
-        if (heroLine == null) {
-            item(key = "empty") { EmptyFeed(settings) }
-        } else {
-            item(key = "hero") {
-                HeroLineCard(
-                    line = heroLine,
-                    textScale = settings.textScale,
-                    showOriginal = settings.showOriginal,
-                    displayMode = settings.displayMode,
-                    actions = actions,
-                    onExpand = vm::enterReading,
-                    dimmed = settings.liveMode != LiveMode.MIC && heroLine.source == Source.CAMERA && !onScreen && !hero.frozen,
-                    frozen = hero.frozen,
-                )
-            }
-            items(others, key = { it.id }) { line ->
-                CompactLineRow(line = line, showOriginal = settings.showOriginal, actions = actions)
+            Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                RecapCard(story.recap, story.loadingRecap, onDismiss = vm::dismissRecapCard)
             }
         }
+        CaptionStack(
+            lines = lines,
+            mode = settings.displayMode,
+            showOriginal = settings.showOriginal,
+            style = CaptionStyle(
+                newestSp = 26f * scale,
+                recentSp = 20f * scale,
+                olderSp = 17f * scale,
+                color = colors.onSurface,
+                originalColor = colors.onSurfaceVariant,
+                centered = false,
+            ),
+            actions = actions,
+            paused = hero.frozen,
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 20.dp),
+            emptyContent = { EmptyFeed(settings) },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        )
     }
 }
 

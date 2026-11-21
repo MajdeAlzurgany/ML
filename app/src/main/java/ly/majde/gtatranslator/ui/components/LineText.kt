@@ -2,6 +2,8 @@
 
 package ly.majde.gtatranslator.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +40,22 @@ private class SourceLock {
 fun finalTextFor(line: LiveLine, mode: DisplayMode): String = when (mode) {
     DisplayMode.STABLE -> line.stableText
     DisplayMode.WORDS -> line.translation.ifBlank { line.shown }
-    DisplayMode.INSTANT -> line.bestTranslation
+    DisplayMode.INSTANT -> instantText(line).ifBlank { line.bestTranslation }
+}
+
+/** Instant mode: the device translation right away, replaced once by the AI's when it is complete. */
+fun instantText(line: LiveLine): String = when {
+    line.arComplete && line.translation.isNotBlank() -> line.translation
+    line.draft.isNotBlank() -> line.draft
+    line.status == LineStatus.OFFLINE || line.status == LineStatus.DONE -> line.bestTranslation
+    else -> ""
+}
+
+/** True when [line] has something to show in [mode] (otherwise it is still "pending"). */
+fun hasDisplayText(line: LiveLine, mode: DisplayMode): Boolean = when (mode) {
+    DisplayMode.STABLE -> line.stableText.isNotBlank()
+    DisplayMode.WORDS -> line.translation.isNotBlank() || line.shown.isNotBlank()
+    DisplayMode.INSTANT -> instantText(line).isNotBlank()
 }
 
 /**
@@ -99,11 +116,14 @@ fun DisplayTranslation(
             }
         }
         DisplayMode.INSTANT -> {
-            val text = line.bestTranslation
+            val text = instantText(line)
             if (text.isBlank()) {
                 Placeholder(style, color, modifier, textAlign, minLines)
             } else {
-                Text(text, style = style, color = color, textAlign = textAlign, minLines = minLines, modifier = modifier)
+                // A single, soft swap from the device translation to the AI one.
+                Crossfade(targetState = text, animationSpec = tween(220), label = "instant", modifier = modifier) { value ->
+                    Text(value, style = style, color = color, textAlign = textAlign, minLines = minLines)
+                }
             }
         }
     }

@@ -19,10 +19,10 @@ sealed interface TrackEvent {
  *  - the session ends when the subtitle disappears, so the next one is always new.
  */
 class SubtitleTracker(
-    private val stableFrames: Int = 3,
+    private val stableFrames: Int = 2,
     private val sameLineSimilarity: Double = 0.85,
     private val repeatSimilarity: Double = 0.82,
-    private val repeatWindowMs: Long = 20_000L,
+    private val repeatWindowMs: Long = 6_000L,
     private val clock: () -> Long = { SystemClock.elapsedRealtime() },
 ) {
     private enum class Relation { SAME, SUPERSET, DIFFERENT }

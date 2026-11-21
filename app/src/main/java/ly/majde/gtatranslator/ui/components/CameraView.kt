@@ -142,7 +142,7 @@ fun SubtitleCameraView(
     )
 }
 
-private const val ANALYSIS_INTERVAL_MS = 180L
+private const val ANALYSIS_INTERVAL_MS = 150L
 
 /** Draggable subtitle region: drag inside to move, drag the corner dots to resize. */
 @Composable
